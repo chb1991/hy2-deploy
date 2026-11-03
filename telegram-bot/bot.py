@@ -222,9 +222,9 @@ def hy2_version():
         output="\n".join(part for part in (result.stdout,result.stderr) if part)
         # The official CLI prints an ASCII logo before its build metadata.
         # Extract only the semantic version from the dedicated Version: line.
-        output=re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]","",output)
+        output=re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]","",output)
         match=re.search(
-            r"(?im)^\\s*Version:\\s*(v?\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)\\s*$",
+            r"(?im)^\s*Version:\s*(v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\s*$",
             output,
         )
         if not match:
