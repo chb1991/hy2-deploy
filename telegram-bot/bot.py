@@ -23,8 +23,7 @@ COMMANDS=[
     {"command":"status","description":"查看服务器实时状态"},
     {"command":"devices","description":"查看设备在线情况和独立流量"},
     {"command":"add","description":"添加设备，例如 /add WIN-PC"},
-    {"command":"all","description":"发送全部设备节点链接和二维码"},
-    {"command":"add_defaults","description":"兼容旧命令：发送全部设备节点链接和二维码"},
+    {"command":"add_defaults","description":"发送全部设备节点链接和二维码"},
     {"command":"get","description":"获取设备链接和二维码"},
     {"command":"node","description":"获取指定设备节点链接"},
     {"command":"qr","description":"获取指定设备二维码"},
@@ -325,8 +324,7 @@ def help_text():
         "/start - 服务器状态和设备概览\n"
         "/status - 查看服务器实时状态\n"
         "/devices - 查看每台设备在线情况和独立流量\n"
-        "/all - 发送 WIN-PC、MACBOOK、IPHONE、FAMILY 全部节点链接和二维码\n"
-        "/add_defaults - /all 的兼容别名\n"
+        "/add_defaults - 发送 WIN-PC、MACBOOK、IPHONE、FAMILY 全部节点链接和二维码\n"
         "/add WIN-PC - 添加一个设备并生成独立链接、二维码\n"
         "/get WIN-PC - 发送指定设备的链接和二维码\n"
         "/node WIN-PC - 只获取指定设备链接\n"
@@ -369,7 +367,7 @@ def handle_message(message):
         if command in ("/devices","/clients"):
             send_message(chat_id,devices_text())
             return
-        if command in ("/all","/add_defaults","/adddefaults","/add-defaults"):
+        if command in ("/add_defaults","/adddefaults","/add-defaults"):
             result=run_manager("add-defaults")
             created=result.get("created",[])
             clients=result.get("clients",[])

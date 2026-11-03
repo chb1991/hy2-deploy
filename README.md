@@ -144,4 +144,4 @@ curl -fsSL -o /root/upgrade-hy2-devices.sh https://raw.githubusercontent.com/chb
 bash /root/upgrade-hy2-devices.sh
 ~~~
 
-升级后在 Telegram 私聊机器人发送 `/all`，重新获取四个设备的链接和二维码。旧节点认证会被撤销。
+升级后在 Telegram 私聊机器人发送 `/add_defaults`，重新获取四个设备的链接和二维码。旧节点认证会被撤销。
