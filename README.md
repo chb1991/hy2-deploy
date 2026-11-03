@@ -150,6 +150,9 @@ bash /root/install-hy2.sh
 - 管理员数字 User ID：在 Telegram 搜索 @userinfobot，发送 /start，复制返回的纯数字 ID。不要填写 @用户名。
 - 不要把 Bot Token、Cloudflare API Token 或节点链接发到聊天、截图或 GitHub 仓库。
 
+
+注意：一个 Telegram Bot Token 同一时间只能由一个长轮询实例使用。如果新 VPS 复用当前服务器正在运行的 Bot Token，必须先停止旧服务器上的 hy2-telegram 服务，或为新 VPS 创建另一个 Bot；否则两个实例会争抢 getUpdates。
+
 脚本会先检查 Cloudflare Token、Zone、A 记录及 DNS only 状态，再安装 HY2。HY2 服务启动后，脚本继续提示输入 Telegram Bot Token 和管理员 User ID，验证 Bot Token 后自动安装机器人及多用户功能。无域名模式选择 2，会跳过 Cloudflare 信息，但仍需要 Telegram Bot Token 和管理员 ID。
 
 ### 自动完成的内容
