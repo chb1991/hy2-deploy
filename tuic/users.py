@@ -128,6 +128,7 @@ def main():
     STATE.chmod(0o750)
     CLIENTS.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(CLIENTS, 0, grp.getgrnam("hy2bot").gr_gid)
+    CLIENTS.chmod(0o750)
     with LOCK.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         args = sys.argv[1:]
