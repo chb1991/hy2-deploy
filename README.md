@@ -38,18 +38,18 @@
 
 ## GitHub 一键运行
 
-将 `install.sh` 上传到自己的 GitHub 仓库根目录，例如 `https://github.com/你的用户名/hy2-deploy`。然后在 VPS SSH 终端执行（替换 GitHub 用户名）：
+将 `install.sh` 上传到自己的 GitHub 仓库根目录，例如 `https://github.com/你的用户名/hy2-deploy`。然后在 VPS SSH 终端执行（直接使用下面命令即可）：
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fsSL -o /root/install-hy2.sh https://raw.githubusercontent.com/你的用户名/hy2-deploy/main/install.sh
+curl -fsSL -o /root/install-hy2.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/install.sh
 bash /root/install-hy2.sh
 ```
 
 也可以直接执行：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/你的用户名/hy2-deploy/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/chb1991/hy2-deploy/main/install.sh)
 ```
 
 ## 模式 1：Cloudflare 正式证书（推荐）
