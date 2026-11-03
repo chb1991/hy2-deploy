@@ -306,38 +306,44 @@ chmod 600 "$OUT/node.txt"
 qrencode -o "$OUT/node-qr.png" -s 8 -m 2 "$URI"
 chmod 600 "$OUT/node-qr.png"
 
-cat > "$OUT/server-info.txt" <<INFO
-Hysteria 2 deployment information
-Version: $HY2_VERSION
-Address: $SERVER_ADDR
-Port: 443/UDP
-Auth: $PASSWORD
-INFO
-if [[ "$MODE" == '1' ]]; then
-  printf 'TLS: Let'\''s Encrypt via Cloudflare DNS-01\nSNI: %s\n' "$DOMAIN" >> "$OUT/server-info.txt"
-else
-  printf 'TLS: self-signed certificate with SHA256 pin\nSHA256: %s\n' "$PIN_SHA256" >> "$OUT/server-info.txt"
-fi
-chmod 600 "$OUT/server-info.txt"
+log '准备一体化安装 Telegram 机器人与多设备账号……'
+BOT_INSTALLER_TMP="$(mktemp /tmp/hy2-telegram-installer.XXXXXX.sh)"
+DEVICE_UPGRADE_TMP="$(mktemp /tmp/hy2-device-upgrade.XXXXXX.sh)"
+curl -fsSL --retry 3 "$REPO_RAW/telegram-bot/install.sh" -o "$BOT_INSTALLER_TMP"
+curl -fsSL --retry 3 "$REPO_RAW/telegram-bot/upgrade-devices.sh" -o "$DEVICE_UPGRADE_TMP"
 
-log '部署完成（本机服务及 UDP 443 监听检查通过）'
-printf '\n================ HY2 节点信息 ================\n'
-printf '服务器：%s\n端口：443/UDP\n密码：%s\n' "$SERVER_ADDR" "$PASSWORD"
-if [[ "$MODE" == '1' ]]; then
-  printf 'TLS：Let'\''s Encrypt 正式证书\nSNI：%s\n' "$DOMAIN"
-else
-  printf 'TLS：自签名证书（分享链接含 SHA256 pin）\nSHA256：%s\n' "$PIN_SHA256"
-fi
-printf '\n【节点分享链接】\n%s\n' "$URI"
-printf '\n【二维码 PNG】%s/node-qr.png\n' "$OUT"
-printf '\n【终端二维码】\n'
-cat "$OUT/share-qr.txt"
-printf '\n【文件】\n节点链接：%s/node.txt\n二维码：%s/node-qr.png\n客户端配置：%s\n服务端配置：%s\n' "$OUT" "$OUT" "$CLIENT_CONFIG" "$CONFIG"
-printf '\n【服务状态】\n'
-systemctl --no-pager --full status "$SERVICE" | sed -n '1,12p'
-printf '\n【UDP 443 监听】\n'
-ss -lunp 'sport = :443' || true
-printf '\n必须在 VPS 服务商防火墙/安全组放行入站 UDP 443。Cloudflare 模式必须使用 DNS only（灰云）。\n'
-printf '服务 active 和本机监听不代表公网 UDP 一定可达，请用手机蜂窝网络实测。\n'
-printf '节点文件和 /etc/hysteria/config.yaml 含密码或密钥，严禁上传 GitHub。\n'
-printf '===============================================\n'
+log '安装 Telegram 机器人和本机统计 API……'
+bash "$BOT_INSTALLER_TMP"
+
+log '初始化四个独立 HY2 设备账号……'
+bash "$DEVICE_UPGRADE_TMP"
+[[ "$(systemctl is-active hysteria-server.service)" == 'active' ]] || fail 'HY2 服务未保持 active。'
+[[ "$(systemctl is-active hy2-telegram.service)" == 'active' ]] || fail 'Telegram 机器人未保持 active。'
+
+log '验证四个设备的节点链接和二维码……'
+for device in WIN-PC MACBOOK IPHONE FAMILY; do
+  [[ -s "/var/lib/hy2-telegram/clients/$device/node.txt" ]] || fail "$device 节点链接缺失。"
+  [[ -s "/var/lib/hy2-telegram/clients/$device/node-qr.png" ]] || fail "$device 二维码缺失。"
+  [[ -s "/var/lib/hy2-telegram/clients/$device/client.yaml" ]] || fail "$device 客户端配置缺失。"
+done
+
+log '一体化部署完成'
+printf '\n====================================================\n'
+printf ' HY2 + Telegram + 多设备部署完成\n'
+printf '====================================================\n'
+printf 'HY2 服务：'
+systemctl is-active hysteria-server.service || true
+printf 'Telegram 机器人：'
+systemctl is-active hy2-telegram.service || true
+printf '\n默认设备账号：WIN-PC / MACBOOK / IPHONE / FAMILY\n'
+printf '\n设备文件目录：/var/lib/hy2-telegram/clients/\n'
+printf 'WIN-PC 节点链接：/root/hy2-output/node.txt\n'
+printf 'WIN-PC 二维码：/root/hy2-output/node-qr.png\n'
+printf 'WIN-PC 客户端配置：/root/hy2-output/client.yaml\n'
+printf '\nTelegram 操作：\n'
+printf '1. 打开你刚创建的 Bot，先发送 /start。\n'
+printf '2. 再发送 /add_defaults，机器人将依次发送四台设备的独立链接和二维码。\n'
+printf '\n安全提示：Bot Token、Cloudflare Token、设备密码仅保存在 VPS，不会上传 GitHub。\n'
+printf '请在 VPS 服务商安全组放行入站 UDP 443；Cloudflare 节点域名必须为 DNS only（灰云）。\n'
+printf '服务 active 和本机监听不代表公网 UDP 一定可达，请用手机蜂窝网络实际测试。\n'
+printf '====================================================\n'
