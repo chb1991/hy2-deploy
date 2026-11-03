@@ -186,12 +186,19 @@ else
   echo "No active UFW/firewalld detected; upstream firewall must allow UDP 51443."
 fi
 
-log "Installing TUIC manager and additive Telegram adapter"
+log "Installing TUIC manager, core updater and Telegram adapter"
 curl -fsSL --retry 3 "$RAW/tuic/users.py" -o "$TMP/users.py"
 curl -fsSL --retry 3 "$RAW/telegram-bot/dual_bot.py" -o "$TMP/dual_bot.py"
+curl -fsSL --retry 3 "$RAW/core-update.sh" -o "$TMP/core-update.sh"
 python3 -m py_compile "$TMP/users.py" "$TMP/dual_bot.py"
+bash -n "$TMP/core-update.sh"
 install -o root -g root -m 0750 "$TMP/users.py" /usr/local/sbin/tuic-users
 install -o root -g root -m 0755 "$TMP/dual_bot.py" /opt/hy2-telegram/dual_bot.py
+install -o root -g root -m 0750 "$TMP/core-update.sh" /usr/local/sbin/core-update
+if [[ -e /usr/local/bin/update || -L /usr/local/bin/update ]]; then
+  [[ "$(readlink -f /usr/local/bin/update 2>/dev/null || true)" == "/usr/local/sbin/core-update" ]] || fail "/usr/local/bin/update 已被其他程序占用；为避免覆盖，未创建 update 快捷命令。"
+fi
+ln -sfn /usr/local/sbin/core-update /usr/local/bin/update
 /usr/local/sbin/tuic-users add-defaults >/dev/null
 
 BACKUP="/root/tuic-upgrade-backup-$(date +%Y%m%d-%H%M%S)"
@@ -201,6 +208,13 @@ cp -a "$UNIT" "$BACKUP/hy2-telegram.service"
 echo 'hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/tuic-users *' > /etc/sudoers.d/tuic-telegram
 chmod 0440 /etc/sudoers.d/tuic-telegram
 visudo -cf /etc/sudoers.d/tuic-telegram >/dev/null
+
+cat > /etc/sudoers.d/core-update <<'SUDO'
+hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/core-update --check --json
+hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/core-update --all --yes --json
+SUDO
+chmod 0440 /etc/sudoers.d/core-update
+visudo -cf /etc/sudoers.d/core-update >/dev/null
 grep -q '^ExecStart=/usr/bin/python3 /opt/hy2-telegram/bot.py$' "$UNIT" || fail "Unknown bot unit ExecStart; aborting instead of overwriting."
 sed -i 's@^ExecStart=/usr/bin/python3 /opt/hy2-telegram/bot.py$@ExecStart=/usr/bin/python3 /opt/hy2-telegram/dual_bot.py@' "$UNIT"
 BOT_UPDATED=1
