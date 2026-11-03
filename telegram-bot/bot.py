@@ -298,8 +298,10 @@ def devices_text():
     lines=["📱 HY2 独立设备列表",""]
     for item in clients:
         name=item["name"]
-        count=int(online.get(name,0) or 0)
-        data=traffic.get(name,{})
+        # Hysteria 2 normalizes userpass usernames to lowercase for Stats API IDs.
+        stat_name=name.lower()
+        count=int(online.get(stat_name,0) or 0)
+        data=traffic.get(stat_name,{})
         if not isinstance(data,dict):
             data={}
         tx=int(data.get("tx",0) or 0)
