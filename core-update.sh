@@ -100,7 +100,7 @@ collect_status() {
     [[ -n "$h_cur" ]] || h_cur="unknown"
     fetch_latest "$HY2_REPO" "hysteria-linux-amd64" "$TMP/hy2-release.json"
     h_tag="$(jq -r '.tag' "$TMP/hy2-release.json")"
-    h_tag="\${h_tag##*/}"
+    h_tag="${h_tag##*/}"
     [[ "$h_tag" == v* ]] || h_tag="v$h_tag"
   fi
   if installed_sb; then
@@ -152,8 +152,8 @@ upgrade() {
     h_old="$(version_hy2 || true)"
     fetch_latest "$HY2_REPO" "hysteria-linux-amd64" "$TMP/hy2-release.json"
     h_new="$(jq -r '.tag' "$TMP/hy2-release.json")"
-    h_new="\${h_new##*/}"
-    h_new="v\${h_new#v}"
+    h_new="${h_new##*/}"
+    h_new="v${h_new#v}"
     h_url="$(jq -r '.url' "$TMP/hy2-release.json")"
     h_digest="$(jq -r '.digest' "$TMP/hy2-release.json")"
   fi
@@ -172,7 +172,7 @@ upgrade() {
   if (( need_h == 0 && need_s == 0 )); then
     log "已安装的核心均为上游最新稳定版，无需升级。"
     if (( JSON )); then
-      jq -n --arg h "\${h_old:-not-installed}" --arg s "\${s_old:-not-installed}" '{ok:true,changed:false,hy2:$h,singbox:$s}'
+      jq -n --arg h "${h_old:-not-installed}" --arg s "${s_old:-not-installed}" '{ok:true,changed:false,hy2:$h,singbox:$s}'
     else
       echo "无需升级。"
     fi
@@ -182,7 +182,7 @@ upgrade() {
   log "下载并校验官方核心文件……"
   if (( need_h )); then
     curl -fL --retry 3 --connect-timeout 10 "$h_url" -o "$TMP/hysteria"
-    printf '%s  %s\n' "\${h_digest#sha256:}" "$TMP/hysteria" | sha256sum -c - >/dev/null || fail "Hysteria SHA256 校验失败。"
+    printf '%s  %s\n' "${h_digest#sha256:}" "$TMP/hysteria" | sha256sum -c - >/dev/null || fail "Hysteria SHA256 校验失败。"
     chmod 0755 "$TMP/hysteria"
     "$TMP/hysteria" version >/dev/null 2>&1 || fail "新 Hysteria 二进制无法执行。"
     # Hysteria does not expose a standalone config-check command; verify YAML parses before restart.
@@ -196,7 +196,7 @@ PY
   fi
   if (( need_s )); then
     curl -fL --retry 3 --connect-timeout 10 "$s_url" -o "$TMP/$s_asset"
-    printf '%s  %s\n' "\${s_digest#sha256:}" "$TMP/$s_asset" | sha256sum -c - >/dev/null || fail "sing-box SHA256 校验失败。"
+    printf '%s  %s\n' "${s_digest#sha256:}" "$TMP/$s_asset" | sha256sum -c - >/dev/null || fail "sing-box SHA256 校验失败。"
     mkdir "$TMP/singbox-extract"
     tar -xzf "$TMP/$s_asset" -C "$TMP/singbox-extract"
     extracted="$(find "$TMP/singbox-extract" -type f -name sing-box -print -quit)"
@@ -250,8 +250,8 @@ PY
   fi
 
   if (( JSON )); then
-    jq -n --arg h_old "\${h_old:-not-installed}" --arg h_new "\${h_new:-not-installed}" \
-      --arg s_old "\${s_old:-not-installed}" --arg s_new "\${s_new:-not-installed}" \
+    jq -n --arg h_old "${h_old:-not-installed}" --arg h_new "${h_new:-not-installed}" \
+      --arg s_old "${s_old:-not-installed}" --arg s_new "${s_new:-not-installed}" \
       --arg backup "$BACKUP" '{ok:true,changed:true,hy2:{from:$h_old,to:$h_new},singbox:{from:$s_old,to:$s_new},backup:$backup}'
   else
     echo "核心升级完成。"
