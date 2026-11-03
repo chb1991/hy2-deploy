@@ -182,6 +182,7 @@ _update_lock = threading.Lock()
 
 def _update_worker(chat_id):
     try:
+        hy2.send_message(chat_id, "⏳ 已开始升级上游稳定版核心。HY2 和 TUIC 可能分别短暂断开，其他机器人命令仍可使用。")
         result = subprocess.run(
             ["/usr/bin/sudo", "-n", UPDATE_HELPER, "--all", "--yes", "--json"],
             capture_output=True, text=True, timeout=1800, check=False,
@@ -221,7 +222,6 @@ def execute_update(chat_id):
     if not _update_lock.acquire(blocking=False):
         hy2.send_message(chat_id, "已有核心升级任务正在执行，请勿重复确认。")
         return
-    hy2.send_message(chat_id, "⏳ 已开始升级上游稳定版核心。HY2 和 TUIC 可能分别短暂断开，其他机器人命令仍可使用。")
     worker = threading.Thread(target=_update_worker, args=(chat_id,), name="core-updater", daemon=True)
     worker.start()
 
