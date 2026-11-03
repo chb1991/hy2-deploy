@@ -13,11 +13,18 @@ SERVICE='hysteria-server.service'
 CONFIG='/etc/hysteria/config.yaml'
 OUT='/root/hy2-output'
 INSTALLER_TMP=''
+BOT_INSTALLER_TMP=''
+DEVICE_UPGRADE_TMP=''
+REPO_RAW='https://raw.githubusercontent.com/chb1991/hy2-deploy/main'
 
 log()  { printf '\n[HY2] %s\n' "$*"; }
 info() { printf '[信息] %s\n' "$*"; }
 fail() { printf '\n[失败] %s\n' "$*" >&2; exit 1; }
-cleanup() { if [[ -n "$INSTALLER_TMP" ]]; then rm -f "$INSTALLER_TMP"; fi; }
+cleanup() {
+  [[ -z "$INSTALLER_TMP" ]] || rm -f "$INSTALLER_TMP"
+  [[ -z "$BOT_INSTALLER_TMP" ]] || rm -f "$BOT_INSTALLER_TMP"
+  [[ -z "$DEVICE_UPGRADE_TMP" ]] || rm -f "$DEVICE_UPGRADE_TMP"
+}
 on_error() {
   rc=$?
   printf '\n[错误] install.sh 执行失败，退出码：%s\n' "$rc" >&2
@@ -79,6 +86,9 @@ ensure_swap() {
 [[ "$ID" == 'debian' && "$VERSION_ID" == '13' ]] || fail "仅支持 Debian 13，当前系统：$PRETTY_NAME"
 [[ "$(uname -m)" == 'x86_64' ]] || fail "仅支持 x86_64，当前架构：$(uname -m)"
 command -v systemctl >/dev/null 2>&1 || fail '未检测到 systemd。'
+if [[ -e "$CONFIG" ]] || systemctl cat "$SERVICE" >/dev/null 2>&1 || [[ -e /etc/hy2-telegram/bot.env ]] || systemctl cat hy2-telegram.service >/dev/null 2>&1; then
+  fail '检测到现有 HY2 或 Telegram 安装。此一体化安装器仅用于全新 VPS，避免覆盖已有服务。现有服务器请勿运行此脚本。'
+fi
 
 log "Hysteria 2 一键部署，官方核心版本 $HY2_VERSION"
 export DEBIAN_FRONTEND=noninteractive
