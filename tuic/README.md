@@ -38,6 +38,18 @@ sing-box 从官方 GitHub v1.14.4 下载，并核验 GitHub release asset 的 SH
 
 `/status` 中监听成功 **不等于** 国内手机能连通，仍需使用蜂窝网络实测 TUIC，测试后才可确认可用。
 
+## 双核心统一升级
+
+TUIC 增量安装完成后，会同时安装统一升级器：
+
+- SSH root：`update`，显示 HY2 / sing-box 当前版本和上游最新稳定版，输入 `y` 二次确认。
+- SSH：`update --check` 只检查；`update --hy2` 只升级 HY2；`update --singbox` 只升级 sing-box。
+- Telegram 私聊管理员：发送 `/update`，查看版本后点击确认或取消。
+
+升级器只下载 Hysteria 与 sing-box 官方 GitHub Release 稳定正式版，校验 SHA256。升级前备份核心和相关配置；不重置 HY2/TUIC 设备凭据、节点链接、二维码、端口、域名和证书。两个核心分别升级、分别重启验证；失败时恢复旧二进制并尝试恢复服务。升级过程中相应协议会短暂断开。
+
+升级完成后，仍应通过手机蜂窝网络实际测试节点。备份保存在 `/root/core-upgrade-backups/`。
+
 ## 诊断
 
 ```bash
