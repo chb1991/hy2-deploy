@@ -191,43 +191,47 @@ def cmd_init():
     auth=doc.get("auth") or {}
     if not isinstance(auth,dict):
         raise ManagerError("auth 配置格式错误。")
-    migrated=False
-    if auth.get("type")=="password":
-        password=auth.get("password")
-        if not isinstance(password,str) or not password:
-            raise ManagerError("旧 password 为空，不能迁移。")
-        users={"OLD-SHARED":password}
-        doc["auth"]={"type":"userpass","userpass":users}
-        migrated=True
-    elif auth.get("type")=="userpass":
+    auth_type=auth.get("type")
+    if auth_type not in ("password","userpass"):
+        raise ManagerError("仅支持 password 或 userpass 认证，当前类型："+str(auth_type))
+
+    # Replace legacy credentials with four fresh device credentials. Re-running
+    # this upgrade is idempotent once this exact set has been registered.
+    current={}
+    if auth_type=="userpass":
         raw=auth.get("userpass")
-        if not isinstance(raw,dict) or not raw:
-            raise ManagerError("当前 userpass 用户表为空。")
-        users={name_ok(k):str(v) for k,v in raw.items()}
-        doc["auth"]={"type":"userpass","userpass":users}
-    else:
-        raise ManagerError("仅支持 password 或 userpass 认证，当前类型："+str(auth.get("type")))
+        if isinstance(raw,dict):
+            current={name_ok(k):str(v) for k,v in raw.items()}
+    registry_clients=load_registry().get("clients",{})
+    initialized=(set(current)==set(DEFAULTS) and set(registry_clients)==set(DEFAULTS))
+    users=current if initialized else {name:os.urandom(24).hex() for name in DEFAULTS}
+    changed=(auth_type!="userpass" or current!=users)
+    doc["auth"]={"type":"userpass","userpass":users}
+
     artifacts=[]
     try:
         for n,p in users.items():
             artifacts.append(build_artifact(n,p))
-        if migrated:
+        if changed:
             backup_config(original)
             write_config(doc,old_stat)
             restart_or_rollback(original,old_stat)
     except Exception:
-        if migrated:
+        if changed:
             restore_config(original,old_stat)
             subprocess.run(["/usr/bin/systemctl","restart",SERVICE],capture_output=True,timeout=30,check=False)
         raise
+
     save_registry(update_registry(users))
-    if "OLD-SHARED" in users:
-        legacy=next(x for x in artifacts if x["name"]=="OLD-SHARED")
-        atomic(STATE/"node.txt",(legacy["uri"]+"\n").encode(),0o640,0,gid())
-        shutil.copyfile(legacy["qr_path"],STATE/"node-qr.png")
-        os.chown(STATE/"node-qr.png",0,gid())
-        os.chmod(STATE/"node-qr.png",0o640)
-    print(json.dumps({"ok":True,"migrated":migrated,"clients":[x["name"] for x in artifacts]},ensure_ascii=False))
+    for entry in CLIENTS.iterdir():
+        if entry.is_dir() and entry.name not in users:
+            shutil.rmtree(entry,ignore_errors=True)
+    primary=next(x for x in artifacts if x["name"]=="WIN-PC")
+    atomic(STATE/"node.txt",(primary["uri"]+"\n").encode(),0o640,0,gid())
+    shutil.copyfile(primary["qr_path"],STATE/"node-qr.png")
+    os.chown(STATE/"node-qr.png",0,gid())
+    os.chmod(STATE/"node-qr.png",0o640)
+    print(json.dumps({"ok":True,"reset":changed,"clients":[x["name"] for x in artifacts]},ensure_ascii=False))
 
 
 def add_many(names):
@@ -272,7 +276,9 @@ def cmd_add_defaults():
     current=users_from(load_yaml(CONFIG))
     missing=[n for n in DEFAULTS if n not in current]
     created=add_many(missing) if missing else []
-    print(json.dumps({"ok":True,"created":created,"existing":[n for n in DEFAULTS if n in current]},ensure_ascii=False))
+    users=users_from(load_yaml(CONFIG))
+    clients=[artifact_for(n,users[n]) for n in DEFAULTS]
+    print(json.dumps({"ok":True,"created":created,"existing":[n for n in DEFAULTS if n not in missing],"clients":clients},ensure_ascii=False))
 
 
 def cmd_list():
@@ -284,19 +290,22 @@ def cmd_list():
     print(json.dumps({"ok":True,"clients":items},ensure_ascii=False))
 
 
+def artifact_for(name,password):
+    directory=CLIENTS/name
+    node=directory/"node.txt"
+    qr=directory/"node-qr.png"
+    if not node.is_file() or not qr.is_file():
+        return build_artifact(name,password)
+    return {"name":name,"uri":node.read_text(encoding="utf-8").strip(),"node_path":str(node),"qr_path":str(qr)}
+
+
 def cmd_get(name):
     n=name_ok(name)
     users=users_from(load_yaml(CONFIG))
     if n not in users:
         raise ManagerError("找不到活动设备："+n)
-    directory=CLIENTS/n
-    node=directory/"node.txt"
-    qr=directory/"node-qr.png"
-    if not node.is_file() or not qr.is_file():
-        item=build_artifact(n,users[n])
-        node=Path(item["node_path"])
-        qr=Path(item["qr_path"])
-    print(json.dumps({"ok":True,"name":n,"uri":node.read_text(encoding="utf-8").strip(),"node_path":str(node),"qr_path":str(qr)},ensure_ascii=False))
+    item=artifact_for(n,users[n])
+    print(json.dumps({"ok":True,**item},ensure_ascii=False))
 
 
 def cmd_delete(name):

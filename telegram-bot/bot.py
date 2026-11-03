@@ -370,15 +370,13 @@ def handle_message(message):
         if command in ("/add_defaults","/adddefaults","/add-defaults"):
             result=run_manager("add-defaults")
             created=result.get("created",[])
-            existing=result.get("existing",[])
-            if not created:
-                send_message(chat_id,"四个默认设备已经存在，无需重复创建。\n"+devices_text())
-                return
-            send_message(chat_id,"✅ 默认设备创建成功："+", ".join(x["name"] for x in created))
-            for item in created:
+            clients=result.get("clients",[])
+            if created:
+                send_message(chat_id,"✅ 默认设备创建成功："+", ".join(x["name"] for x in created))
+            else:
+                send_message(chat_id,"四个默认设备已经存在，重新发送当前有效链接和二维码。")
+            for item in clients:
                 send_client(chat_id,item)
-            if existing:
-                send_message(chat_id,"以下设备原本已存在，未重复创建："+", ".join(existing))
             return
         if command=="/add":
             if len(args)!=1:

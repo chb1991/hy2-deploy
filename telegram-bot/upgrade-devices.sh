@@ -78,14 +78,13 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 
-log "迁移旧单密码认证，并为旧账号生成新的 userpass 链接……"
+log "撤销旧节点认证，生成四个全新的独立设备账号……"
 INIT_RESULT="$(/usr/local/sbin/hy2-users init)"
-printf '%s\n' "$INIT_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("认证迁移：" + ("已完成" if d.get("migrated") else "无需迁移") + "；当前设备：" + (", ".join(d.get("clients", [])) or "无"))'
+printf '%s\n' "$INIT_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("旧认证：" + ("已替换并撤销" if d.get("reset") else "已经是多用户模式") + "；新设备：" + (", ".join(d.get("clients", [])) or "无"))'
 
-if [[ -f /var/lib/hy2-telegram/clients/OLD-SHARED/node.txt ]]; then
-  install -o root -g root -m 600 /var/lib/hy2-telegram/clients/OLD-SHARED/node.txt /root/hy2-output/node.txt
-  install -o root -g root -m 600 /var/lib/hy2-telegram/clients/OLD-SHARED/node-qr.png /root/hy2-output/node-qr.png
-fi
+# Keep the old output filenames pointing to the new primary WIN-PC account.
+install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node.txt /root/hy2-output/node.txt
+install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node-qr.png /root/hy2-output/node-qr.png
 
 log "重启 Telegram 机器人……"
 systemctl enable hy2-telegram.service >/dev/null
@@ -107,5 +106,5 @@ printf '\n机器人日志：journalctl -u hy2-telegram -n 30 --no-pager\n'
 printf '\n现在在 Telegram 私聊机器人发送：\n'
 printf '/add_defaults\n'
 printf '机器人会创建 WIN-PC、MACBOOK、IPHONE、FAMILY 四个独立账号，并分别发送节点链接和二维码。\n'
-printf '\n旧共享密码保留为 OLD-SHARED；原来不带用户名的旧链接必须替换。\n'
+printf '\n旧认证已撤销，所有原节点链接失效；新设备凭据已独立生成。\n'
 printf '====================================================\n'

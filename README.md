@@ -144,4 +144,4 @@ curl -fsSL -o /root/upgrade-hy2-devices.sh https://raw.githubusercontent.com/chb
 bash /root/upgrade-hy2-devices.sh
 \`\`\`
 
-升级后在 Telegram 私聊机器人发送 \`/add_defaults\`，批量创建 WIN-PC、MACBOOK、IPHONE、FAMILY 四个独立账号，并分别获取链接和二维码。
+升级后在 Telegram 私聊机器人发送 \`/add_defaults\`，自动生成 WIN-PC、MACBOOK、IPHONE、FAMILY 四个全新独立账号，并分别获取链接和二维码；旧节点认证会被撤销。

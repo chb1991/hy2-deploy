@@ -57,7 +57,7 @@ bash /root/upgrade-hy2-devices.sh
 /add_defaults
 \`\`\`
 
-机器人会批量创建 WIN-PC、MACBOOK、IPHONE、FAMILY 四个账号，只重启 HY2 一次，然后分别发送四条独立链接和四张二维码。
+升级脚本会先创建四个账号。发送此命令会重新发送 WIN-PC、MACBOOK、IPHONE、FAMILY 当前有效的四条独立链接和四张二维码。
 
 ## 添加其他设备
 
