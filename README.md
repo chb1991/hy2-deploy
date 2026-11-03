@@ -111,6 +111,19 @@ ss -lunp 'sport = :443'
 /usr/local/bin/hysteria -c /root/hy2-output/client.yaml share --qr
 ```
 
+## 增加 TUIC v5（保留现有 HY2）
+
+在 HY2 + Telegram 部署成功后，若需要增加 TUIC v5，执行独立增量安装器；它使用 UDP 51443 和独立 sing-box 服务，不覆盖现有 HY2 UDP 443：
+
+~~~bash
+curl -fsSL -o /root/install-tuic.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/tuic/install.sh
+bash /root/install-tuic.sh
+~~~
+
+TUIC 安装器会创建独立证书、四个 TUIC 设备账号，并将 Telegram 机器人切换为双协议管理。安装结束前会以 `hy2bot` 身份检查每个设备的节点文件和二维码均可读取。二维码目录权限为 `0750`，文件权限为 `0640`，避免严格 `umask 077` 下目录权限过窄。
+
+完整步骤、隔离方式和维护命令见 [TUIC 增量安装说明](tuic/README.md)。
+
 ## 核心升级（HY2 + sing-box）
 
 机器人安装器会部署统一核心升级工具。完成 HY2 + Telegram 部署后，或完成 TUIC 增量安装后，可在 root SSH 终端直接执行：
