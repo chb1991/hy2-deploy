@@ -77,6 +77,12 @@ bash /root/upgrade-hy2-devices.sh
 
 删除操作需要在 Telegram 中点击确认。删除设备后该设备凭据失效；HY2 会重启一次，因此其他设备的现有连接会短暂中断，但其他账号不会被删除。
 
+## 核心升级命令
+
+使用当前版本的机器人安装器部署后，会安装统一核心升级器。root SSH 可运行 `update` 并输入 `y` 确认；`update --check` 只检查版本。若服务器还安装了 TUIC，`update` 会同时检查并升级 Hysteria 2 与 sing-box。
+
+Telegram 双协议机器人支持 `/update`：先查看当前版本和上游最新稳定版，再点击确认或取消。升级只使用官方 GitHub 稳定 Release 并校验 SHA256；升级前备份核心，保留现有配置与设备凭据，失败时尝试自动回滚。升级期间服务会短暂重启。
+
 ## 服务器文件与安全
 
 - 服务端用户名和密码保存在 /etc/hysteria/config.yaml。
