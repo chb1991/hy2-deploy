@@ -29,6 +29,11 @@ printf '  1. 已通过 @BotFather 创建 Telegram Bot。\n'
 printf '  2. 已取得 Bot Token。\n'
 printf '  3. 已取得你自己的 Telegram 数字 User ID（不是用户名）。\n\n'
 
+log "安装 Python、sudo、时区数据和基础证书……"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends python3 sudo ca-certificates curl openssl tzdata
+
 read -r -s -p "粘贴 Telegram Bot Token（不会显示）： " BOT_TOKEN
 printf '\n'
 [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || fail "Bot Token 格式不正确。"
@@ -51,11 +56,6 @@ try:
 except Exception as exc:
     raise SystemExit("Token 验证失败或 VPS 无法访问 Telegram API：" + type(exc).__name__)
 PY
-
-log "安装 Python、sudo 和基础证书……"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends python3 sudo ca-certificates curl openssl
 
 if grep -Eq '^trafficStats:' "$CONFIG"; then
   fail "检测到现有 trafficStats 配置。为避免覆盖现有统计服务，请先人工检查 $CONFIG；本脚本没有修改它。"
