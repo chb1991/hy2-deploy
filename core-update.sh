@@ -59,6 +59,23 @@ installed_sb() {
   [[ -x "$SB_BIN" && -f "$SB_CONFIG" ]] && systemctl cat "$SB_UNIT" >/dev/null 2>&1
 }
 
+fetch_singbox_latest() {
+  local json_file="$1" release tag version asset_name asset url digest
+  release="$(api_get "$API/repos/$SB_REPO/releases/latest")" || fail "无法获取 sing-box 最新稳定 Release。"
+  jq -e '.draft == false and .prerelease == false and (.tag_name|type=="string")' >/dev/null <<< "$release" || fail "sing-box 最新版本不是稳定正式版。"
+  tag="$(jq -r '.tag_name' <<< "$release")"
+  version="${tag#v}"
+  asset_name="sing-box-$version-linux-amd64.tar.gz"
+  asset="$(jq -c --arg name "$asset_name" '[.assets[] | select(.name==$name)][0] // empty' <<< "$release")"
+  [[ -n "$asset" && "$asset" != "null" ]] || fail "sing-box Release 缺少资产：$asset_name"
+  url="$(jq -r '.browser_download_url // empty' <<< "$asset")"
+  digest="$(jq -r '.digest // empty' <<< "$asset")"
+  [[ "$url" == https://github.com/"$SB_REPO"/releases/download/* ]] || fail "sing-box 下载地址不符合官方 GitHub Release 地址。"
+  digest_ok "$digest"
+  jq -n --arg tag "$tag" --arg version "$version" --arg asset "$asset_name" --arg url "$url" --arg digest "$digest" \
+    '{tag:$tag,version:$version,asset:$asset,url:$url,digest:$digest}' > "$json_file"
+}
+
 fetch_latest() {
   local repo="$1" asset_name="$2" json_file="$3"
   local release tag asset url digest
@@ -90,24 +107,8 @@ collect_status() {
     s_inst=1
     s_cur="$(version_sb || true)"
     [[ -n "$s_cur" ]] || s_cur="unknown"
-    fetch_latest "$SB_REPO" "sing-box-$(jq -r '.tag' "$TMP/sb-release.json" 2>/dev/null | sed 's/^v//')-linux-amd64.tar.gz" "$TMP/sb-release.json" 2>/dev/null || {
-      local release tag asset_name
-      release="$(api_get "$API/repos/$SB_REPO/releases/latest")" || fail "无法获取 sing-box 最新稳定 Release。"
-      jq -e '.draft == false and .prerelease == false' >/dev/null <<< "$release" || fail "sing-box 最新版本不是稳定正式版。"
-      tag="$(jq -r '.tag_name' <<< "$release")"
-      s_tag="\${tag#v}"
-      asset_name="sing-box-$s_tag-linux-amd64.tar.gz"
-      local asset url digest
-      asset="$(jq -c --arg name "$asset_name" '[.assets[] | select(.name==$name)][0] // empty' <<< "$release")"
-      [[ -n "$asset" && "$asset" != "null" ]] || fail "sing-box Release 缺少资产：$asset_name"
-      url="$(jq -r '.browser_download_url // empty' <<< "$asset")"
-      digest="$(jq -r '.digest // empty' <<< "$asset")"
-      [[ "$url" == https://github.com/"$SB_REPO"/releases/download/* ]] || fail "sing-box 下载地址不是官方 GitHub Release。"
-      digest_ok "$digest"
-      jq -n --arg tag "$tag" --arg asset "$asset_name" --arg url "$url" --arg digest "$digest" \
-        '{tag:$tag,asset:$asset,url:$url,digest:$digest}' > "$TMP/sb-release.json"
-    }
-    s_tag="$(jq -r '.tag' "$TMP/sb-release.json" | sed 's/^v//')"
+    fetch_singbox_latest "$TMP/sb-release.json"
+    s_tag="$(jq -r '.version' "$TMP/sb-release.json")"
   fi
 
   if (( JSON )); then
@@ -158,19 +159,11 @@ upgrade() {
   fi
   if installed_sb && (( DO_SB )); then
     s_old="$(version_sb || true)"
-    local release tag
-    release="$(api_get "$API/repos/$SB_REPO/releases/latest")" || fail "无法获取 sing-box 最新稳定 Release。"
-    jq -e '.draft == false and .prerelease == false' >/dev/null <<< "$release" || fail "sing-box 最新版本不是稳定正式版。"
-    tag="$(jq -r '.tag_name' <<< "$release")"
-    s_new="\${tag#v}"
-    s_asset="sing-box-$s_new-linux-amd64.tar.gz"
-    local asset
-    asset="$(jq -c --arg name "$s_asset" '[.assets[] | select(.name==$name)][0] // empty' <<< "$release")"
-    [[ -n "$asset" && "$asset" != "null" ]] || fail "sing-box 缺少资产：$s_asset"
-    s_url="$(jq -r '.browser_download_url // empty' <<< "$asset")"
-    s_digest="$(jq -r '.digest // empty' <<< "$asset")"
-    [[ "$s_url" == https://github.com/"$SB_REPO"/releases/download/* ]] || fail "sing-box 下载地址不是官方 GitHub Release。"
-    digest_ok "$s_digest"
+    fetch_singbox_latest "$TMP/sb-release.json"
+    s_new="$(jq -r '.version' "$TMP/sb-release.json")"
+    s_asset="$(jq -r '.asset' "$TMP/sb-release.json")"
+    s_url="$(jq -r '.url' "$TMP/sb-release.json")"
+    s_digest="$(jq -r '.digest' "$TMP/sb-release.json")"
   fi
 
   local need_h=0 need_s=0
