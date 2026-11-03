@@ -147,23 +147,17 @@ def build_artifact(name,password):
     directory.mkdir(parents=True,exist_ok=True)
     os.chown(directory,0,gid())
     os.chmod(directory,0o750)
-    fd,tmp=tempfile.mkstemp(prefix=".share-",suffix=".yaml",dir=str(directory))
-    try:
-        with os.fdopen(fd,"w",encoding="utf-8") as f:
-            yaml.safe_dump(client,f,allow_unicode=True,sort_keys=False)
-        os.chown(tmp,0,gid())
-        os.chmod(tmp,0o640)
-        proc=subprocess.run([HY2,"-c",tmp,"share"],capture_output=True,text=True,timeout=15,check=False)
-        if proc.returncode!=0:
-            raise ManagerError("Hysteria 官方 share 命令生成 "+name+" 失败。")
-        uri=proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
-        if not uri.startswith("hysteria2://"):
-            raise ManagerError("官方 share 命令没有返回 hysteria2:// 链接。")
-        parts=urlsplit(uri)
-        uri=urlunsplit((parts.scheme,parts.netloc,parts.path,parts.query,quote(name,safe="-_")))
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
+    client_path=directory/"client.yaml"
+    client_data=yaml.safe_dump(client,allow_unicode=True,sort_keys=False).encode("utf-8")
+    atomic(client_path,client_data,0o640,0,gid())
+    proc=subprocess.run([HY2,"-c",str(client_path),"share"],capture_output=True,text=True,timeout=15,check=False)
+    if proc.returncode!=0:
+        raise ManagerError("Hysteria 官方 share 命令生成 "+name+" 失败。")
+    uri=proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    if not uri.startswith("hysteria2://"):
+        raise ManagerError("官方 share 命令没有返回 hysteria2:// 链接。")
+    parts=urlsplit(uri)
+    uri=urlunsplit((parts.scheme,parts.netloc,parts.path,parts.query,quote(name,safe="-_")))
     node=directory/"node.txt"
     qr=directory/"node-qr.png"
     atomic(node,(uri+"\n").encode(),0o640,0,gid())
@@ -172,7 +166,7 @@ def build_artifact(name,password):
         raise ManagerError("二维码生成失败："+name)
     os.chown(qr,0,gid())
     os.chmod(qr,0o640)
-    return {"name":name,"uri":uri,"node_path":str(node),"qr_path":str(qr)}
+    return {"name":name,"uri":uri,"node_path":str(node),"qr_path":str(qr),"client_path":str(client_path)}
 
 
 def update_registry(users):
@@ -296,7 +290,10 @@ def artifact_for(name,password):
     qr=directory/"node-qr.png"
     if not node.is_file() or not qr.is_file():
         return build_artifact(name,password)
-    return {"name":name,"uri":node.read_text(encoding="utf-8").strip(),"node_path":str(node),"qr_path":str(qr)}
+    client_path=directory/"client.yaml"
+    if not client_path.is_file():
+        return build_artifact(name,password)
+    return {"name":name,"uri":node.read_text(encoding="utf-8").strip(),"node_path":str(node),"qr_path":str(qr),"client_path":str(client_path)}
 
 
 def cmd_get(name):

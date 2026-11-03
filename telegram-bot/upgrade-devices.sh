@@ -82,9 +82,20 @@ log "撤销旧节点认证，生成四个全新的独立设备账号……"
 INIT_RESULT="$(/usr/local/sbin/hy2-users init)"
 printf '%s\n' "$INIT_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("旧认证：" + ("已替换并撤销" if d.get("reset") else "已经是多用户模式") + "；新设备：" + (", ".join(d.get("clients", [])) or "无"))'
 
-# Keep the old output filenames pointing to the new primary WIN-PC account.
+# Keep the familiar output filenames pointing to the current WIN-PC account.
 install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node.txt /root/hy2-output/node.txt
 install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node-qr.png /root/hy2-output/node-qr.png
+install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/client.yaml /root/hy2-output/client.yaml
+/usr/local/bin/hysteria -c /root/hy2-output/client.yaml share --notext --qr > /root/hy2-output/share-qr.txt
+chmod 600 /root/hy2-output/share-qr.txt
+cat > /root/hy2-output/server-info.txt <<'INFO'
+Hysteria 2 multi-user deployment
+Authentication: userpass (one independent credential per device)
+Default users: WIN-PC, MACBOOK, IPHONE, FAMILY
+Transport: UDP 443
+Client credentials and QR codes: /var/lib/hy2-telegram/clients/
+INFO
+chmod 600 /root/hy2-output/server-info.txt
 
 log "重启 Telegram 机器人……"
 systemctl enable hy2-telegram.service >/dev/null

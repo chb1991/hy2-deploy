@@ -34,11 +34,18 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends python3 sudo ca-certificates curl openssl tzdata
 
-read -r -s -p "粘贴 Telegram Bot Token（不会显示）： " BOT_TOKEN
-printf '\n'
+BOT_TOKEN="${BOT_TOKEN:-}"
+ADMIN_USER_ID="${ADMIN_USER_ID:-}"
+
+if [[ -z "$BOT_TOKEN" ]]; then
+  read -r -s -p "粘贴 Telegram Bot Token（不会显示）： " BOT_TOKEN
+  printf '\n'
+fi
 [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || fail "Bot Token 格式不正确。"
 
-read -r -p "输入你的 Telegram 数字 User ID： " ADMIN_USER_ID
+if [[ -z "$ADMIN_USER_ID" ]]; then
+  read -r -p "输入你的 Telegram 数字 User ID： " ADMIN_USER_ID
+fi
 [[ "$ADMIN_USER_ID" =~ ^[0-9]{5,15}$ ]] || fail "Telegram User ID 必须是数字。"
 
 log "验证 Telegram Bot Token……"
