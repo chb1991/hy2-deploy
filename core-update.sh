@@ -49,7 +49,7 @@ version_hy2() {
 version_sb() {
   local output
   output="$("$SB_BIN" version 2>&1)" || return 1
-  printf '%s\n' "$output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?' | head -n 1
+  printf '%s\n' "$output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?' | sed -n '1p'
 }
 
 installed_hy2() {
