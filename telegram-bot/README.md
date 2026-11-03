@@ -29,6 +29,8 @@
 
 设备名称只允许 1-32 位英文字母、数字、下划线和连字符。机器人仅接受绑定的 Telegram 数字 User ID，且仅响应私聊。
 
+Bot Token 通过 Telegram 的 @BotFather 使用 /newbot 创建；管理员数字 User ID 可通过 @userinfobot 的 /start 获取。Token 不要发给他人或提交 GitHub。
+
 ## 升级已安装的机器人
 
 前提：原 Hysteria 服务和 Telegram 机器人均正常运行；原部署目录中存在 /root/hy2-output/client.yaml。

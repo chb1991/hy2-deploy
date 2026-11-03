@@ -1,0 +1,20 @@
+name: Validate deployment scripts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n install.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Check Python syntax
+        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py

@@ -143,6 +143,13 @@ bash /root/install-hy2.sh
 6. Telegram Bot Token（隐藏输入；先通过 @BotFather 创建）。
 7. Telegram 管理员数字 User ID（不是用户名）。
 
+
+### Telegram 信息如何获取
+
+- Bot Token：在 Telegram 搜索 @BotFather，发送 /newbot，按提示设置机器人名称和用户名，复制 BotFather 返回的 Token。输入安装器时不会回显。
+- 管理员数字 User ID：在 Telegram 搜索 @userinfobot，发送 /start，复制返回的纯数字 ID。不要填写 @用户名。
+- 不要把 Bot Token、Cloudflare API Token 或节点链接发到聊天、截图或 GitHub 仓库。
+
 脚本会先检查 Cloudflare Token、Zone、A 记录及 DNS only 状态，再安装 HY2。HY2 服务启动后，脚本继续提示输入 Telegram Bot Token 和管理员 User ID，验证 Bot Token 后自动安装机器人及多用户功能。无域名模式选择 2，会跳过 Cloudflare 信息，但仍需要 Telegram Bot Token 和管理员 ID。
 
 ### 自动完成的内容

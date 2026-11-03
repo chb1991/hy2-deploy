@@ -29,6 +29,16 @@ on_error() {
   rc=$?
   printf '\n[错误] install.sh 执行失败，退出码：%s\n' "$rc" >&2
   journalctl -u "$SERVICE" -n 40 --no-pager 2>/dev/null || true
+  if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+    if ! systemctl is-active --quiet hy2-telegram.service 2>/dev/null; then
+      printf '\nHY2 已安装，但 Telegram 步骤未完成。可单独继续安装：\n'
+      printf 'curl -fsSL -o /root/install-hy2-telegram.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/install.sh\n'
+      printf 'bash /root/install-hy2-telegram.sh\n'
+      printf '然后执行 telegram-bot/upgrade-devices.sh 完成四设备初始化。\n'
+    else
+      printf '\nHY2 与机器人已运行；若失败发生在多设备初始化阶段，可重新运行仓库中的 telegram-bot/upgrade-devices.sh。\n'
+    fi
+  fi
   exit "$rc"
 }
 trap cleanup EXIT
