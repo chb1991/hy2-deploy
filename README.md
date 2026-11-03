@@ -137,11 +137,11 @@ bash /root/install-hy2-telegram.sh
 
 ## Telegram 多设备独立节点管理
 
-已安装 Telegram 机器人的用户，可按 [多设备管理教程](telegram-bot/README.md) 升级：
+已支持 WIN-PC、MACBOOK、IPHONE、FAMILY 四个独立用户、独立链接、二维码和流量统计。升级教程见 [telegram-bot/README.md](telegram-bot/README.md)。
 
-\`\`\`bash
+~~~bash
 curl -fsSL -o /root/upgrade-hy2-devices.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/upgrade-devices.sh
 bash /root/upgrade-hy2-devices.sh
-\`\`\`
+~~~
 
-升级后在 Telegram 私聊机器人发送 \`/add_defaults\`，自动生成 WIN-PC、MACBOOK、IPHONE、FAMILY 四个全新独立账号，并分别获取链接和二维码；旧节点认证会被撤销。
+升级后在 Telegram 私聊机器人发送 `/add_defaults`，重新获取四个设备的链接和二维码。旧节点认证会被撤销。

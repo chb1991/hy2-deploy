@@ -105,6 +105,6 @@ systemctl is-active hy2-telegram.service || true
 printf '\n机器人日志：journalctl -u hy2-telegram -n 30 --no-pager\n'
 printf '\n现在在 Telegram 私聊机器人发送：\n'
 printf '/add_defaults\n'
-printf '机器人会创建 WIN-PC、MACBOOK、IPHONE、FAMILY 四个独立账号，并分别发送节点链接和二维码。\n'
+printf '四个独立账号已在升级时生成；发送命令会重新发送四条链接和四张二维码。\n'
 printf '\n旧认证已撤销，所有原节点链接失效；新设备凭据已独立生成。\n'
 printf '====================================================\n'
