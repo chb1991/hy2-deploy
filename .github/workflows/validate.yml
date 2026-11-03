@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
-        run: bash -n install.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh tuic/install.sh
+        run: bash -n install.sh core-update.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh tuic/install.sh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
