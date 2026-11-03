@@ -2,6 +2,7 @@
 """Private Telegram monitor and multi-device manager for Hysteria 2."""
 import json
 import os
+import re
 import socket
 import subprocess
 import time
@@ -209,11 +210,29 @@ def service_state():
 
 def hy2_version():
     try:
-        result=subprocess.run([HYSTERIA_BIN,"version"],capture_output=True,text=True,timeout=3,check=False)
-        value=(result.stdout or result.stderr).strip()
-        return value.splitlines()[0][:100] if value else "未知"
+        result=subprocess.run(
+            [HYSTERIA_BIN,"version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode != 0:
+            return "读取失败"
+        output="\n".join(part for part in (result.stdout,result.stderr) if part)
+        # The official CLI prints an ASCII logo before its build metadata.
+        # Extract only the semantic version from the dedicated Version: line.
+        output=re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]","",output)
+        match=re.search(
+            r"(?im)^\\s*Version:\\s*(v?\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)\\s*$",
+            output,
+        )
+        if not match:
+            return "未识别"
+        version=match.group(1)
+        return version if version.startswith("v") else "v"+version
     except (OSError,subprocess.TimeoutExpired):
-        return "未知"
+        return "读取失败"
 
 
 def online_totals():
