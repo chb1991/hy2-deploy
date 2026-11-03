@@ -133,3 +133,15 @@ bash /root/install-hy2-telegram.sh
 \`\`\`
 
 机器人 Token 和管理员数字 User ID 仅在 VPS 安装时输入，绝不提交到 GitHub。统计 API 仅绑定 \`127.0.0.1:9999\`，不对公网开放。安装时会备份并修改 Hysteria 配置、重启一次 HY2，因此现有连接会短暂中断。
+
+
+## Telegram 多设备独立节点管理
+
+已安装 Telegram 机器人的用户，可按 [多设备管理教程](telegram-bot/README.md) 升级：
+
+\`\`\`bash
+curl -fsSL -o /root/upgrade-hy2-devices.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/upgrade-devices.sh
+bash /root/upgrade-hy2-devices.sh
+\`\`\`
+
+升级后在 Telegram 私聊机器人发送 \`/add_defaults\`，批量创建 WIN-PC、MACBOOK、IPHONE、FAMILY 四个独立账号，并分别获取链接和二维码。
