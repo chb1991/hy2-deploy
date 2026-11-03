@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 CONFIG = Path("/etc/tuic-singbox/config.json")
-STATE = Path("/var/lib/tuic-singbox")
+STATE = Path("/var/lib/hy2-telegram/tuic")
 CLIENTS = STATE / "clients"
 LOCK = STATE / ".users.lock"
 INFO = Path("/etc/tuic-singbox/info.json")
@@ -123,8 +123,9 @@ def main():
         raise ManagementError("需要 root 权限。")
     if not CONFIG.is_file() or not INFO.is_file():
         raise ManagementError("TUIC 尚未安装。")
-    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
-    STATE.chmod(0o700)
+    STATE.mkdir(mode=0o750, parents=True, exist_ok=True)
+    os.chown(STATE, 0, grp.getgrnam("hy2bot").gr_gid)
+    STATE.chmod(0o750)
     CLIENTS.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(CLIENTS, 0, grp.getgrnam("hy2bot").gr_gid)
     with LOCK.open("a") as lock:
