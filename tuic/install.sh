@@ -95,7 +95,7 @@ chmod 0600 "$ROOT/cloudflare.ini"
 unset CF_TOKEN
 CERT_NAME="tuic-$DOMAIN"
 CERT_DIR="/etc/letsencrypt/live/$CERT_NAME"
-certbot certonly --non-interactive --agree-tos --keep-until-expiring \
+PYTHONWARNINGS='ignore::PendingDeprecationWarning' certbot certonly --non-interactive --agree-tos --keep-until-expiring \
   --dns-cloudflare --dns-cloudflare-credentials "$ROOT/cloudflare.ini" \
   --dns-cloudflare-propagation-seconds 45 \
   --email "$EMAIL" --cert-name "$CERT_NAME" -d "$DOMAIN"
