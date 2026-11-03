@@ -111,9 +111,39 @@ ss -lunp 'sport = :443'
 /usr/local/bin/hysteria -c /root/hy2-output/client.yaml share --qr
 ```
 
+## 核心升级（HY2 + sing-box）
+
+机器人安装器会部署统一核心升级工具。完成 HY2 + Telegram 部署后，或完成 TUIC 增量安装后，可在 root SSH 终端直接执行：
+
+~~~bash
+update
+~~~
+
+命令先检查上游版本并显示当前版本与最新稳定版，输入 `y` 才开始升级。支持：
+
+| 命令 | 作用 |
+|---|---|
+| `update` | 检查并交互确认升级所有已安装核心 |
+| `update --check` | 只检查版本，不修改服务 |
+| `update --hy2` | 只升级 Hysteria 2 |
+| `update --singbox` | 只升级 sing-box（TUIC） |
+
+Telegram 私聊管理员机器人发送 `/update`，机器人先显示两个核心的当前版本和上游最新稳定版，再点击 **确认升级** 或 **取消**。升级在后台执行，不会阻塞机器人继续响应其他命令。
+
+升级策略：
+
+- 只读取官方 GitHub Releases 的最新稳定正式版，不安装 Draft 或 Pre-release。
+- 下载官方发布资产，并校验 GitHub Release 提供的 SHA256；缺少摘要或校验不匹配时立即中止。
+- 升级前备份旧核心、服务单元、配置和必要状态到 `/root/core-upgrade-backups/`。
+- 不重写 HY2/TUIC 配置，不重置设备 UUID、密码、分享链接、二维码、端口、域名或证书。
+- HY2 与 sing-box 分别重启并检查服务状态、版本和 UDP 监听。
+- 任一升级步骤失败时，自动恢复备份的旧核心并尝试恢复服务。
+
+升级期间对应协议会短暂断开。自动回滚是故障恢复措施，不替代升级后使用手机蜂窝网络进行实际连接测试。
+
 ## 版本与安全说明
 
-当前脚本固定安装 `v2.13.0`。需要升级时，先查看 Hysteria 官方 Releases，再修改 `install.sh` 顶部的 `HY2_VERSION`。
+首次安装脚本当前固定安装 Hysteria `v2.13.0`；部署后通过上面的 `update` 命令跟进上游最新稳定版。
 
 - 不要将节点链接、密码、Cloudflare Token、服务端配置或输出目录提交到公开仓库。
 - 删除 GitHub 当前分支中的旧文件不会自动删除 Git 历史。若旧文件曾包含订阅链接或凭据，应撤销/轮换；需要彻底清除历史时，应另建干净仓库或单独重写 Git 历史。
