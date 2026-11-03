@@ -15,7 +15,8 @@
 
 - /start：服务器状态和设备概览
 - /devices：列出设备在线情况、上传和下载流量
-- /add_defaults：发送四个默认设备当前有效的链接和二维码
+- /all：发送四个默认设备当前有效的链接和二维码（推荐，最好记）
+- /add_defaults：/all 的兼容别名
 - /add IPAD：创建新设备并发送链接、二维码
 - /get WIN-PC：获取指定设备链接和二维码
 - /node WIN-PC：只获取指定设备链接
@@ -55,10 +56,10 @@ bash /root/upgrade-hy2-devices.sh
 升级成功后，在 Telegram 私聊机器人发送：
 
 ~~~text
-/add_defaults
+/all
 ~~~
 
-机器人会依次发送 WIN-PC、MACBOOK、IPHONE、FAMILY 的独立链接和二维码。重复发送此命令不会重置密码，只会重新发送当前有效凭据。
+机器人会依次发送 WIN-PC、MACBOOK、IPHONE、FAMILY 的独立链接和二维码。重复发送此命令不会重置密码，只会重新发送当前有效凭据。旧命令 /add_defaults 仍然可用。
 
 ## 添加、查询和删除设备
 
