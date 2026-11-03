@@ -21,7 +21,7 @@
 curl -fsSL -o /root/install-tuic.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/tuic/install.sh && bash /root/install-tuic.sh
 ```
 
-安装器先检查原 HY2 与机器人是否正常、UDP 51443 是否空闲；若原 HY2 未使用 Cloudflare DNS-01、缺少原有多用户环境，安装器直接退出，不进行覆盖式转换。通过现有 Cloudflare DNS API Token 为原域名独立签发 TUIC 证书；密钥仍只存服务器。Cloudflare DNS 需保持灰云。不要求入站 TCP 80/443。
+安装器先检查原 HY2 与机器人是否正常、UDP 51443 是否空闲；若原 HY2 未使用 Cloudflare DNS-01、缺少原有多用户环境，安装器直接退出，不进行覆盖式转换。通过现有 Cloudflare DNS API Token 为原域名独立签发 TUIC 证书；密钥仍只存服务器。Cloudflare DNS 需保持灰云。不要求入站 TCP 80/443。 安装器会生成四台设备的节点文件和二维码，并逐一以 `hy2bot` 身份验证文件可读性；目录权限固定为 `0750`，节点和二维码文件为 `0640`，避免 `umask 077` 导致 Telegram 机器人无法读取二维码。
 
 sing-box 从官方 GitHub v1.14.4 下载，并核验 GitHub release asset 的 SHA256。TUIC 配置写入前后均执行检查，失败后不会主动改动 HY2。服务器本机防火墙如果启用了 UFW/firewalld，只新增 UDP 51443 放行规则；没有自动管理的防火墙时，需自行检查服务商安全组、nftables 等是否允许 UDP 51443。
 
