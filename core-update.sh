@@ -94,7 +94,7 @@ fetch_latest() {
 
 collect_status() {
   local h_inst=0 s_inst=0 h_cur="" h_tag="" s_cur="" s_tag=""
-  if installed_hy2; then
+  if installed_hy2 && (( DO_HY2 )); then
     h_inst=1
     h_cur="$(version_hy2 || true)"
     [[ -n "$h_cur" ]] || h_cur="unknown"
@@ -103,7 +103,7 @@ collect_status() {
     h_tag="${h_tag##*/}"
     [[ "$h_tag" == v* ]] || h_tag="v$h_tag"
   fi
-  if installed_sb; then
+  if installed_sb && (( DO_SB )); then
     s_inst=1
     s_cur="$(version_sb || true)"
     [[ -n "$s_cur" ]] || s_cur="unknown"
@@ -206,8 +206,9 @@ PY
     "$TMP/sing-box" check -c "$SB_CONFIG" >/dev/null || fail "现有 TUIC 配置不兼容新 sing-box，取消升级。"
   fi
 
-  BACKUP="/root/core-upgrade-backups/$(date +%Y%m%d-%H%M%S)"
-  install -d -m 0700 "$BACKUP"
+  install -d -m 0700 /root/core-upgrade-backups
+  BACKUP="$(mktemp -d "/root/core-upgrade-backups/$(date +%Y%m%d-%H%M%S)-XXXXXX")"
+  chmod 0700 "$BACKUP"
   if (( need_h )); then
     cp -a "$HY2_BIN" "$BACKUP/hysteria"
     cp -a "$HY2_CONFIG" "$BACKUP/hysteria-config.yaml"
@@ -236,7 +237,8 @@ PY
     systemctl restart "$HY2_UNIT"
     sleep 2
     systemctl is-active --quiet "$HY2_UNIT" || fail "HY2 升级后未保持 active。"
-    [[ -n "$(ss -H -lun 'sport = :443' 2>/dev/null)" ]] || log "警告：未在 UDP 443 检测到监听，请确认 HY2 配置端口。"
+    [[ "$(version_hy2 || true)" == "$h_new" ]] || fail "HY2 升级后版本核验不匹配。"
+    [[ -n "$(ss -H -lun 'sport = :443' 2>/dev/null)" ]] || fail "HY2 升级后未检测到 UDP 443 监听。"
     log "HY2 已升级：$h_old -> $(version_hy2 || echo unknown)"
   fi
   if (( need_s )); then
@@ -245,6 +247,7 @@ PY
     systemctl restart "$SB_UNIT"
     sleep 2
     systemctl is-active --quiet "$SB_UNIT" || fail "TUIC 升级后未保持 active。"
+    [[ "$(version_sb || true)" == "$s_new" ]] || fail "sing-box 升级后版本核验不匹配。"
     [[ -n "$(ss -H -lun 'sport = :51443' 2>/dev/null)" ]] || fail "TUIC 升级后 UDP 51443 未监听。"
     log "sing-box 已升级：$s_old -> $(version_sb || echo unknown)"
   fi
@@ -264,7 +267,7 @@ PY
 
 main() {
   [[ $EUID -eq 0 ]] || fail "请使用 root 执行。"
-  need curl; need jq; need sha256sum; need tar; need systemctl; need ss
+  need curl; need jq; need sha256sum; need tar; need systemctl; need ss; need flock; need python3
   local mode="all"
   while (($#)); do
     case "$1" in
