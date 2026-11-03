@@ -12,9 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
-        run: bash -n install.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh
+        run: bash -n install.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh tuic/install.sh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
       - name: Check Python syntax
-        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py
+        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py telegram-bot/dual_bot.py tuic/users.py
