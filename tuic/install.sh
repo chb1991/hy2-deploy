@@ -106,13 +106,11 @@ cat > /usr/local/sbin/tuic-cert-copy <<'HOOK'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 directory="$(cat /etc/tuic-singbox/cert-lineage)"
-if [[ -n "$RENEWED_LINEAGE" && "$RENEWED_LINEAGE" != "$directory" ]]; then exit 0; fi
+if [[ -n "${RENEWED_LINEAGE:-}" && "$RENEWED_LINEAGE" != "$directory" ]]; then exit 0; fi
 install -o root -g tuic -m 0640 "$directory/fullchain.pem" /etc/tuic-singbox/cert.pem
 install -o root -g tuic -m 0640 "$directory/privkey.pem" /etc/tuic-singbox/key.pem
 if systemctl is-active --quiet tuic-singbox.service; then systemctl try-restart tuic-singbox.service; fi
 HOOK
-# The hook can also be invoked manually before issuance.
-sed -i 's/^\(if \[\[ -n "\)\$RENEWED_LINEAGE/\1$'{RENEWED_LINEAGE:-}'/' /usr/local/sbin/tuic-cert-copy
 chmod 0750 /usr/local/sbin/tuic-cert-copy
 echo "$CERT_DIR" > "$ROOT/cert-lineage"
 chmod 0600 "$ROOT/cert-lineage"
