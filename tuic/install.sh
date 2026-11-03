@@ -201,6 +201,14 @@ fi
 ln -sfn /usr/local/sbin/core-update /usr/local/bin/update
 /usr/local/sbin/tuic-users add-defaults >/dev/null
 
+log "Verifying TUIC client artifacts are readable by the Telegram service account"
+for device in WIN-PC MACBOOK IPHONE FAMILY; do
+  DEVICE_DIR="/var/lib/hy2-telegram/tuic/clients/$device"
+  [[ -d "$DEVICE_DIR" ]] || fail "Missing TUIC client directory: $DEVICE_DIR"
+  sudo -u hy2bot test -r "$DEVICE_DIR/node.txt" || fail "hy2bot cannot read $DEVICE_DIR/node.txt"
+  sudo -u hy2bot test -r "$DEVICE_DIR/node-qr.png" || fail "hy2bot cannot read $DEVICE_DIR/node-qr.png"
+done
+
 BACKUP="/root/tuic-upgrade-backup-$(date +%Y%m%d-%H%M%S)"
 install -d -m 0700 "$BACKUP"
 cp -a "$UNIT" "$BACKUP/hy2-telegram.service"
