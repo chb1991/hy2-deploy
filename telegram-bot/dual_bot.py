@@ -9,6 +9,7 @@ import bot as hy2
 TUIC_HELPER = "/usr/local/sbin/tuic-users"
 TUIC_SERVICE = "tuic-singbox.service"
 TUIC_PORT = 51443
+UPDATE_HELPER = "/usr/local/sbin/core-update"
 
 hy2.COMMANDS.extend([
     {"command": "devices_tuic", "description": "查看 TUIC 设备"},
@@ -16,6 +17,7 @@ hy2.COMMANDS.extend([
     {"command": "get_tuic", "description": "获取 TUIC 节点和二维码"},
     {"command": "delete_tuic", "description": "删除 TUIC 设备，需确认"},
     {"command": "restart_tuic", "description": "重启 TUIC，需确认"},
+    {"command": "update", "description": "检查并升级 HY2、sing-box 核心，需确认"},
 ])
 old_handle_message = hy2.handle_message
 old_handle_callback = hy2.handle_callback
@@ -136,6 +138,75 @@ def defaults_prompt(chat_id):
     )
 
 
+def update_check():
+    result = subprocess.run(
+        ["/usr/bin/sudo", "-n", UPDATE_HELPER, "--check", "--json"],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError((result.stderr or "无法检查上游核心版本").strip()[:500])
+    import json
+    return json.loads(result.stdout)
+
+
+def update_plan_text(data):
+    lines = ["🧩 核心升级检查", ""]
+    for key, label in (("hy2", "Hysteria 2"), ("singbox", "sing-box / TUIC")):
+        item = data.get(key, {})
+        if not item.get("installed"):
+            lines.append(f"{label}：未安装，跳过")
+            continue
+        current = item.get("current") or "未知"
+        latest = item.get("latest") or "未知"
+        if item.get("update_available"):
+            lines.append(f"{label}：{current} → {latest}（有更新）")
+        else:
+            lines.append(f"{label}：{current}（已是最新稳定版）")
+    lines.extend(["", "确认后将升级所有已安装核心。服务连接会短暂中断；用户、密码、端口、域名和配置保持不变。"])
+    return "\n".join(lines)
+
+
+def update_confirm(chat_id):
+    data = update_check()
+    hy2.send_message(chat_id, update_plan_text(data), {
+        "inline_keyboard": [[
+            {"text": "确认升级", "callback_data": "dual:update:confirm"},
+            {"text": "取消", "callback_data": "dual:update:cancel"},
+        ]]
+    })
+
+
+def execute_update(chat_id):
+    hy2.send_message(chat_id, "⏳ 正在升级上游稳定版核心，请稍候。HY2 和 TUIC 可能分别短暂断开。")
+    result = subprocess.run(
+        ["/usr/bin/sudo", "-n", UPDATE_HELPER, "--all", "--yes", "--json"],
+        capture_output=True, text=True, timeout=1200, check=False,
+    )
+    if result.returncode:
+        detail = (result.stderr or result.stdout or "升级失败，未返回详细信息。").strip()
+        hy2.send_message(chat_id, "❌ 核心升级失败：\n" + detail[-2500:])
+        return
+    import json
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        hy2.send_message(chat_id, "升级命令已结束，但返回内容无法解析，请检查 SSH：journalctl 和核心服务状态。")
+        return
+    if not value.get("ok"):
+        hy2.send_message(chat_id, "❌ 核心升级未成功。")
+        return
+    if not value.get("changed"):
+        hy2.send_message(chat_id, "✅ HY2 和 sing-box 均已是上游最新稳定版，无需升级。")
+        return
+    hy2.send_message(
+        chat_id,
+        "✅ 核心升级完成\n"
+        f"HY2：{value.get('hy2', {}).get('from')} → {value.get('hy2', {}).get('to')}\n"
+        f"sing-box：{value.get('singbox', {}).get('from')} → {value.get('singbox', {}).get('to')}\n"
+        f"备份：{value.get('backup', '已保存到 VPS')}"
+    )
+
+
 def send_help(chat_id):
     hy2.send_message(chat_id,
         hy2.help_text() + "\n\n"
@@ -166,6 +237,8 @@ def handle_message(message):
             hy2.send_message(chat_id, hy2.devices_text())
         elif command == "/help":
             send_help(chat_id)
+        elif command == "/update":
+            update_confirm(chat_id)
         elif command in ("/add_defaults", "/adddefaults", "/add-defaults"):
             defaults_prompt(chat_id)
         elif command == "/devices_tuic":
