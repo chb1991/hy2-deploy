@@ -218,7 +218,7 @@ def send_help(chat_id):
         "/get_tuic IPAD - 获取 TUIC 节点二维码\n"
         "/delete_tuic IPAD - 删除 TUIC 账号\n"
         "/restart_tuic - 单独重启 TUIC\n"
-        "/update - 检查上游最新稳定版并二次确认升级\\n"
+        "/update - 检查上游最新稳定版并二次确认升级\n"
         "原有 HY2 命令保持可用。")
 
 
