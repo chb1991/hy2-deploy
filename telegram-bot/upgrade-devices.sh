@@ -85,6 +85,8 @@ printf '%s\n' "$INIT_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdi
 # Keep the familiar output filenames pointing to the current WIN-PC account.
 install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node.txt /root/hy2-output/node.txt
 install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/node-qr.png /root/hy2-output/node-qr.png
+install -o hy2bot -g hy2bot -m 640 /var/lib/hy2-telegram/clients/WIN-PC/node.txt /var/lib/hy2-telegram/node.txt
+install -o hy2bot -g hy2bot -m 640 /var/lib/hy2-telegram/clients/WIN-PC/node-qr.png /var/lib/hy2-telegram/node-qr.png
 install -o root -g root -m 600 /var/lib/hy2-telegram/clients/WIN-PC/client.yaml /root/hy2-output/client.yaml
 /usr/local/bin/hysteria -c /root/hy2-output/client.yaml share --notext --qr > /root/hy2-output/share-qr.txt
 chmod 600 /root/hy2-output/share-qr.txt
