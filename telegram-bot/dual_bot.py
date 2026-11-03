@@ -3,6 +3,7 @@
 import html
 import os
 import subprocess
+import threading
 
 import bot as hy2
 
@@ -176,35 +177,53 @@ def update_confirm(chat_id):
     })
 
 
-def execute_update(chat_id):
-    hy2.send_message(chat_id, "⏳ 正在升级上游稳定版核心，请稍候。HY2 和 TUIC 可能分别短暂断开。")
-    result = subprocess.run(
-        ["/usr/bin/sudo", "-n", UPDATE_HELPER, "--all", "--yes", "--json"],
-        capture_output=True, text=True, timeout=1200, check=False,
-    )
-    if result.returncode:
-        detail = (result.stderr or result.stdout or "升级失败，未返回详细信息。").strip()
-        hy2.send_message(chat_id, "❌ 核心升级失败：\n" + detail[-2500:])
-        return
-    import json
+_update_lock = threading.Lock()
+
+
+def _update_worker(chat_id):
     try:
-        value = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        hy2.send_message(chat_id, "升级命令已结束，但返回内容无法解析，请检查 SSH：journalctl 和核心服务状态。")
+        result = subprocess.run(
+            ["/usr/bin/sudo", "-n", UPDATE_HELPER, "--all", "--yes", "--json"],
+            capture_output=True, text=True, timeout=1800, check=False,
+        )
+        if result.returncode:
+            detail = (result.stderr or result.stdout or "升级失败，未返回详细信息。").strip()
+            hy2.send_message(chat_id, "❌ 核心升级失败：\n" + detail[-2500:])
+            return
+        import json
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            hy2.send_message(chat_id, "升级命令已结束，但返回内容无法解析，请检查 SSH：journalctl 和核心服务状态。")
+            return
+        if not value.get("ok"):
+            hy2.send_message(chat_id, "❌ 核心升级未成功。")
+            return
+        if not value.get("changed"):
+            hy2.send_message(chat_id, "✅ HY2 和 sing-box 均已是上游最新稳定版，无需升级。")
+            return
+        hy2.send_message(
+            chat_id,
+            "✅ 核心升级完成\n"
+            f"HY2：{value.get('hy2', {}).get('from')} → {value.get('hy2', {}).get('to')}\n"
+            f"sing-box：{value.get('singbox', {}).get('from')} → {value.get('singbox', {}).get('to')}\n"
+            f"备份：{value.get('backup', '已保存到 VPS')}"
+        )
+    except subprocess.TimeoutExpired:
+        hy2.send_message(chat_id, "❌ 核心升级执行超时。请通过 SSH 检查服务状态和 /root/core-upgrade-backups/。")
+    except Exception as exc:
+        hy2.send_message(chat_id, "❌ 核心升级异常：" + str(exc)[:500])
+    finally:
+        _update_lock.release()
+
+
+def execute_update(chat_id):
+    if not _update_lock.acquire(blocking=False):
+        hy2.send_message(chat_id, "已有核心升级任务正在执行，请勿重复确认。")
         return
-    if not value.get("ok"):
-        hy2.send_message(chat_id, "❌ 核心升级未成功。")
-        return
-    if not value.get("changed"):
-        hy2.send_message(chat_id, "✅ HY2 和 sing-box 均已是上游最新稳定版，无需升级。")
-        return
-    hy2.send_message(
-        chat_id,
-        "✅ 核心升级完成\n"
-        f"HY2：{value.get('hy2', {}).get('from')} → {value.get('hy2', {}).get('to')}\n"
-        f"sing-box：{value.get('singbox', {}).get('from')} → {value.get('singbox', {}).get('to')}\n"
-        f"备份：{value.get('backup', '已保存到 VPS')}"
-    )
+    hy2.send_message(chat_id, "⏳ 已开始升级上游稳定版核心。HY2 和 TUIC 可能分别短暂断开，其他机器人命令仍可使用。")
+    worker = threading.Thread(target=_update_worker, args=(chat_id,), name="core-updater", daemon=True)
+    worker.start()
 
 
 def send_help(chat_id):
