@@ -5,7 +5,7 @@ set -Eeuo pipefail
 umask 077
 
 RAW="https://raw.githubusercontent.com/chb1991/hy2-deploy/main"
-VERSION="1.14.4"
+SING_BOX_VERSION="1.14.4"
 ROOT="/etc/tuic-singbox"
 BIN="/opt/tuic-singbox/sing-box"
 UNIT="/etc/systemd/system/hy2-telegram.service"
@@ -77,9 +77,9 @@ install -d -o root -g tuic -m 0750 "$ROOT"
 install -d -o root -g root -m 0700 /var/lib/tuic-singbox
 install -d -o root -g root -m 0755 /etc/letsencrypt/renewal-hooks/deploy
 
-log "Fetching official sing-box version $VERSION with SHA256 verification"
-ASSET="sing-box-$VERSION-linux-amd64.tar.gz"
-RELEASE="$(curl -fsSL --retry 3 "https://api.github.com/repos/SagerNet/sing-box/releases/tags/v$VERSION")"
+log "Fetching official sing-box version $SING_BOX_VERSION with SHA256 verification"
+ASSET="sing-box-$SING_BOX_VERSION-linux-amd64.tar.gz"
+RELEASE="$(curl -fsSL --retry 3 "https://api.github.com/repos/SagerNet/sing-box/releases/tags/v$SING_BOX_VERSION")"
 URL="$(jq -r --arg n "$ASSET" '[.assets[] | select(.name==$n) | .browser_download_url][0] // empty' <<< "$RELEASE")"
 DIGEST="$(jq -r --arg n "$ASSET" '[.assets[] | select(.name==$n) | .digest][0] // empty' <<< "$RELEASE")"
 [[ "$URL" == "https://github.com/SagerNet/sing-box/releases/download/"* ]] || fail "Official release asset not found."
@@ -87,7 +87,7 @@ DIGEST="$(jq -r --arg n "$ASSET" '[.assets[] | select(.name==$n) | .digest][0] /
 curl -fL --retry 3 "$URL" -o "$TMP/$ASSET"
 echo "$DIGEST" | sed 's/^sha256://' | awk -v path="$TMP/$ASSET" '{print $1 "  " path}' | sha256sum -c - >/dev/null || fail "Binary checksum mismatch."
 tar -xzf "$TMP/$ASSET" -C "$TMP"
-install -m 0755 "$TMP/sing-box-$VERSION-linux-amd64/sing-box" "$BIN"
+install -m 0755 "$TMP/sing-box-$SING_BOX_VERSION-linux-amd64/sing-box" "$BIN"
 
 log "Issuing separate Let's Encrypt DNS-01 certificate for the existing domain"
 printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$ROOT/cloudflare.ini"
