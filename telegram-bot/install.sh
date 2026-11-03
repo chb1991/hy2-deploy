@@ -4,6 +4,7 @@ set -Eeuo pipefail
 umask 077
 
 REPO_RAW="https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot"
+ROOT_RAW="https://raw.githubusercontent.com/chb1991/hy2-deploy/main"
 CONFIG="/etc/hysteria/config.yaml"
 SERVICE="hysteria-server.service"
 BOT_DIR="/opt/hy2-telegram"
@@ -32,7 +33,7 @@ printf '  3. 已取得你自己的 Telegram 数字 User ID（不是用户名）�
 log "安装 Python、sudo、时区数据和基础证书……"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends python3 sudo ca-certificates curl openssl tzdata
+apt-get install -y --no-install-recommends python3 python3-yaml sudo ca-certificates curl openssl tzdata
 
 BOT_TOKEN="${BOT_TOKEN:-}"
 ADMIN_USER_ID="${ADMIN_USER_ID:-}"
@@ -109,11 +110,19 @@ install -d -o root -g root -m 755 "$BOT_DIR"
 install -d -o hy2bot -g hy2bot -m 750 "$STATE_DIR"
 install -d -o root -g hy2bot -m 750 "$ETC_DIR"
 
-log "从 GitHub 下载机器人程序……"
+log "从 GitHub 下载机器人程序和核心升级工具……"
 curl -fsSL --retry 3 "$REPO_RAW/bot.py" -o "$BOT_DIR/bot.py"
+curl -fsSL --retry 3 "$ROOT_RAW/core-update.sh" -o /tmp/hy2-core-update.sh
 python3 -m py_compile "$BOT_DIR/bot.py"
+bash -n /tmp/hy2-core-update.sh
 chown root:root "$BOT_DIR/bot.py"
 chmod 755 "$BOT_DIR/bot.py"
+install -o root -g root -m 0750 /tmp/hy2-core-update.sh /usr/local/sbin/core-update
+rm -f /tmp/hy2-core-update.sh
+if [[ -e /usr/local/bin/update || -L /usr/local/bin/update ]]; then
+  [[ "$(readlink -f /usr/local/bin/update 2>/dev/null || true)" == "/usr/local/sbin/core-update" ]] || fail "/usr/local/bin/update 已被其他程序占用；为避免覆盖，未创建 update 快捷命令。"
+fi
+ln -sfn /usr/local/sbin/core-update /usr/local/bin/update
 
 install -o hy2bot -g hy2bot -m 640 /root/hy2-output/node.txt "$STATE_DIR/node.txt"
 install -o hy2bot -g hy2bot -m 640 /root/hy2-output/node-qr.png "$STATE_DIR/node-qr.png"
@@ -135,6 +144,14 @@ chmod 750 /usr/local/sbin/hy2-restart
 printf 'hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/hy2-restart\n' > /etc/sudoers.d/hy2-telegram
 chmod 440 /etc/sudoers.d/hy2-telegram
 visudo -cf /etc/sudoers.d/hy2-telegram >/dev/null
+
+log "配置 Telegram 机器人受限的核心升级权限……"
+cat > /etc/sudoers.d/core-update <<'SUDO'
+hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/core-update --check --json
+hy2bot ALL=(root) NOPASSWD: /usr/local/sbin/core-update --all --yes --json
+SUDO
+chmod 0440 /etc/sudoers.d/core-update
+visudo -cf /etc/sudoers.d/core-update >/dev/null
 
 log "创建 Telegram Bot systemd 服务……"
 cat > /etc/systemd/system/hy2-telegram.service <<'UNIT'
