@@ -38,7 +38,7 @@
 
 ## GitHub 一键运行
 
-将 `install.sh` 上传到自己的 GitHub 仓库根目录，例如 `https://github.com/你的用户名/hy2-deploy`。然后在 VPS SSH 终端执行（直接使用下面命令即可）：
+将 `install.sh` 上传到自己的 GitHub 仓库根目录，例如 `https://github.com/chb1991/hy2-deploy`。然后在 VPS SSH 终端执行（直接使用下面命令即可）：
 
 ```bash
 apt-get update && apt-get install -y curl
