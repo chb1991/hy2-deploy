@@ -119,3 +119,17 @@ ss -lunp 'sport = :443'
 - 删除 GitHub 当前分支中的旧文件不会自动删除 Git 历史。若旧文件曾包含订阅链接或凭据，应撤销/轮换；需要彻底清除历史时，应另建干净仓库或单独重写 Git 历史。
 - 脚本只做本机部署和监听检查，不能代替公网 UDP 连通性测试。
 - 默认不设置 Brutal 固定带宽，使用 Hysteria 默认拥塞控制，避免把套餐标称带宽误当成真实可用 UDP 带宽。
+
+
+## Telegram 机器人监控（可选）
+
+为已部署的 HY2 增加私有 Telegram 机器人：\`/start\` 显示服务器状态、HY2 在线设备和流量，并发送节点链接与二维码。支持 \`/status\`、\`/node\`、\`/qr\`、\`/traffic\`、带二次确认的 \`/restart\` 和 \`/help\`。
+
+安装说明见 [telegram-bot/README.md](telegram-bot/README.md)。在 VPS 上执行：
+
+\`\`\`bash
+curl -fsSL -o /root/install-hy2-telegram.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/install.sh
+bash /root/install-hy2-telegram.sh
+\`\`\`
+
+机器人 Token 和管理员数字 User ID 仅在 VPS 安装时输入，绝不提交到 GitHub。统计 API 仅绑定 \`127.0.0.1:9999\`，不对公网开放。安装时会备份并修改 Hysteria 配置、重启一次 HY2，因此现有连接会短暂中断。
