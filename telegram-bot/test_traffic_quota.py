@@ -178,6 +178,32 @@ class QuotaTests(unittest.TestCase):
             self.assertIsNone(quota.check_alerts(result, sender=mock.Mock()))
             write.assert_not_called()
 
+    def test_calibrated_usage_crosses_80_percent_only_when_post_anchor_delta_reaches_it(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16}
+        base = quota.create_calibration(
+            config, "204.95", "2026-10-16", "2026-11-06",
+            now=NOW, reader=lambda _: iface(),
+        )
+        data = iface()
+        # 204.95 + 195.05 = 400.00 binary GB -> 80% of 500.
+        data["traffic"]["total"]["tx"] += quota.calibration_amount("195.05")
+        snapshot = quota.collect(config, now=NOW, reader=lambda _: data, calibration=base)
+        self.assertTrue(snapshot["complete"])
+        self.assertAlmostEqual(snapshot["percent"], 80.0, places=3)
+        alerts = []
+        notified = {}
+        def send(_token, _chat_id, body):
+            alerts.append(body)
+        def store(_path, payload, _mode):
+            notified.update(payload)
+        with mock.patch.object(quota, "load_state", side_effect=lambda: dict(notified)), \
+                mock.patch.object(quota, "write_json", side_effect=store):
+            self.assertEqual(quota.check_alerts(snapshot, sender=send), 80)
+            self.assertIsNone(quota.check_alerts(snapshot, sender=send))
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("400.00 GB", alerts[0])
+        self.assertIn("校准后新增上传", alerts[0])
+
     def test_calibration_next_day_gap_disables_alerts_without_repeating_old_days(self):
         config = {"interfaces": ["eth0"], "reset_day": 16}
         base = quota.create_calibration(config, "204.95", "2026-10-16",
