@@ -10,6 +10,14 @@ curl -fsSL --retry 3 --connect-timeout 15 "$URL" -o "$TMP/xray.zip"
 echo "e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  $TMP/xray.zip" | sha256sum -c -
 unzip -p "$TMP/xray.zip" xray > "$TMP/xray"
 chmod 755 "$TMP/xray"
+# Regression for set -Eeuo pipefail: 'xray version | head -n 1' may fail
+# with SIGPIPE (141) before the installer prints any interactive prompt.
+if grep -nE '\|[[:space:]]*head[[:space:]]+-n[[:space:]]+1' "$ROOT/xray-vision/install.sh"; then
+  echo "FAIL: installer contains unsafe head pipeline under pipefail" >&2
+  exit 1
+fi
+banner="$("$TMP/xray" version | sed -n '1p')"
+[[ "$banner" == Xray* ]] || { echo "FAIL: cannot read Xray banner" >&2; exit 1; }
 keys="$("$TMP/xray" x25519)"
 VISION_PRIVATE="$(printf '%s\n' "$keys" | sed -nE 's/^PrivateKey:[[:space:]]*//p' | head -n 1)"
 VISION_PUBLIC="$(printf '%s\n' "$keys" | sed -nE 's/^(Password( \(PublicKey\))?|PublicKey):[[:space:]]*//p' | head -n 1)"
