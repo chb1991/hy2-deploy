@@ -250,6 +250,30 @@ class V2Tests(unittest.TestCase):
         self.assertIn("Xray 暂不自动升级", self.b.messages[-1]["text"])
         self.assertFalse(any("core-update" in repr(x) for x in self.b.calls))
 
+    def test_all_provisioning_entrypoints_ship_v2_dependency(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        for path in (
+            "telegram-bot/install.sh",
+            "telegram-bot/upgrade-devices.sh",
+            "tuic/install.sh",
+            "xray-xhttp/install.sh",
+            "xray-vision/install.sh",
+            "telegram-bot/upgrade-v2.sh",
+        ):
+            script = (root / path).read_text(encoding="utf-8")
+            self.assertIn("v2_ui.py", script, "Missing V2 runtime dependency: " + path)
+
+    def test_v2_upgrader_does_not_restart_proxy_services(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        script = (root / "telegram-bot/upgrade-v2.sh").read_text(encoding="utf-8")
+        self.assertIn('systemctl restart "$SERVICE"', script)
+        self.assertNotIn("systemctl restart hysteria-server.service", script)
+        self.assertNotIn("systemctl restart xray.service", script)
+        self.assertNotIn("systemctl restart xray-vision.service", script)
+        self.assertNotIn("systemctl restart tuic-singbox.service", script)
+        self.assertIn("visudo -cf", script)
+        self.assertIn("chbvps-bot-backups", script)
+
     def test_token_validation_limits_callback_size(self):
         with self.assertRaises(ValueError):
             ui.button("malicious", "a"*65)
