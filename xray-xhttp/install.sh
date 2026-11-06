@@ -50,6 +50,8 @@ try: ipaddress.ip_address(address)
 except ValueError:
     if not domain(address): sys.exit('连接地址格式不正确')
 if not domain(sni): sys.exit('REALITY 目标域名格式不正确')
+if address.lower()==sni.lower():
+    sys.exit('REALITY 目标不得与当前 VPS 的连接地址相同，请选用独立的第三方 TLS 目标。')
 PY
 printf '验证目标 TLS1.3 + H2 支持情况……\n'
 result=$(timeout 15 openssl s_client -connect "$SNI:443" -servername "$SNI" -tls1_3 -alpn h2 </dev/null 2>&1 || true)
@@ -73,8 +75,10 @@ bash "$TMP/install-release.sh" install --version "$VERSION" --without-geodata --
 getent group xray >/dev/null || fail '官方 xray 用户组缺失。'
 keys=$($XRAY x25519)
 PRIVATE=$(printf '%s\n' "$keys" | sed -nE 's/^PrivateKey:[[:space:]]*//p' | head -1)
-PUBLIC=$(printf '%s\n' "$keys" | sed -nE 's/^(Password|PublicKey):[[:space:]]*//p' | head -1)
-[[ -n "$PRIVATE" && -n "$PUBLIC" ]] || fail '未识别 REALITY 公私钥输出。'
+# Official 26.10.31 outputs "Password (PublicKey):", older versions use
+# "Password:" or "PublicKey:". All three spellings are supported.
+PUBLIC=$(printf '%s\n' "$keys" | sed -nE 's/^(Password( \(PublicKey\))?|PublicKey):[[:space:]]*//p' | head -1)
+[[ "$PRIVATE" =~ ^[A-Za-z0-9_-]{43,44}$ && "$PUBLIC" =~ ^[A-Za-z0-9_-]{43,44}$ ]] || fail 'REALITY 密钥输出异常，停止安装。'
 SID=$(openssl rand -hex 8)
 XPATH=/$(openssl rand -hex 10)
 UUIDS=''
