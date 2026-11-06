@@ -170,10 +170,10 @@ fi
 grep -Fq 'Configuration OK.' "$TMP/test.log" || fail "配置未通过官方测试。"
 
 log "安装独立配置与节点凭据……"
-install -o root -g xray -m 640 "$STAGED/config.json" "$VISION_CONF"
 CONF_CREATED=1
-install -d -o root -g hy2bot -m 750 "$VISION_ROOT"
+install -o root -g xray -m 640 "$STAGED/config.json" "$VISION_CONF"
 CREDS_CREATED=1
+install -d -o root -g hy2bot -m 750 "$VISION_ROOT"
 install -d -o root -g hy2bot -m 750 "$VISION_ROOT/clients"
 for name in WIN-PC MACBOOK IPHONE FAMILY; do
   install -d -o root -g hy2bot -m 750 "$VISION_ROOT/clients/$name"
@@ -182,6 +182,7 @@ for name in WIN-PC MACBOOK IPHONE FAMILY; do
     runuser -u hy2bot -- test -r "$VISION_ROOT/clients/$name/$filename" || fail "机器人无法读取 $name/$filename"
   done
 done
+SERVICE_CREATED=1
 cat > "$VISION_UNIT" <<'UNIT'
 [Unit]
 Description=Xray VLESS REALITY Vision isolated TCP service
@@ -209,7 +210,6 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 UNIT
 chmod 644 "$VISION_UNIT"
-SERVICE_CREATED=1
 systemctl daemon-reload
 systemctl enable xray-vision.service >/dev/null
 if ! systemctl start xray-vision.service; then
