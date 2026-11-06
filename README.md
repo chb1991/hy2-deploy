@@ -250,3 +250,38 @@ REALITY 目标不要使用自己的节点连接域名，也应避开官方核心
 
 **兼容性提示：** VLESS XHTTP REALITY 并非所有 iOS 客户端都能正确导入。Loon 曾存在将 XHTTP 链接错误解析为普通 TCP 的报告，二维码成功发送不代表客户端已经支持该传输。应在导入后检查实际传输类型并测试连接。Cloudflare 仍使用 DNS only（灰云），普通橙云不直接转发 REALITY TCP。
 
+## 新增 Loon 兼容 TCP：VLESS + REALITY + Vision
+
+**适用对象：** 已在同一台 Debian 13 x86_64 VPS 上运行 HY2、官方 Xray + XHTTP REALITY 与原 Telegram 机器人。
+
+该方案直接复用已经安装的官方 Xray-core，不安装 3x-ui、不替换 XHTTP 配置、不更改 HY2/TUIC。新增独立进程 xray-vision.service，默认监听 TCP 8443。服务端使用官方 VLESS TCP REALITY XTLS-Vision 配置（Flow 为 xtls-rprx-vision）。
+
+root SSH 一行安装（交互命令必须以 bash 方式执行，**不要使用 curl | bash**）：
+
+~~~bash
+curl -fsSL -o /root/install-vision.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/xray-vision/install.sh && bash /root/install-vision.sh
+~~~
+
+交互设置：
+
+1. 连接域名/IP：默认自动复用已有 XHTTP 节点的连接地址；也可以手动选择另一个灰云 A 记录。
+2. REALITY SNI：默认从现有 XHTTP 配置读取已验证目标。必须支持 TLS 1.3、H2，且 TLS 证书验证通过；并以官方 Xray 配置检查结果为准。
+3. TCP 端口：默认 8443；若已占用可选另一个 1024–65535 的端口。
+4. 输入 y 确认创建服务、四套独立 UUID 及更新原 Telegram 机器人。
+
+**网络：** Cloudflare 原 A 记录继续 DNS only（灰云），不必新建域名或申请证书；需要放行入站 **TCP 8443**（或你填写的端口）。TCP 443（XHTTP）、UDP 443（HY2）和 UDP 51443（TUIC，如有）不变。新服务采用独立 systemd，启动/停止不重启其他代理核心。安装器检测已有 Vision 时拒绝覆盖；安装中失败会尝试移除新 Vision 服务并恢复原 Telegram 文件。
+
+**Telegram：**
+
+- /vstatus：Vision 服务状态。
+- /vall：发送四个 Vision 设备链接、对应 Loon 专用配置行和二维码。
+- /vget IPHONE：仅发送 iPhone 的 Vision 设备节点、Loon 配置和二维码。
+
+原有 HY2 /get、/add_defaults，XHTTP /xget、/xall 和 TUIC 扩展命令保持不变。Vision 服务端配置仅保存在 VPS 的 /usr/local/etc/xray/vision.json；四套私有客户端节点位于 /var/lib/hy2-telegram/vision/clients/。不在 GitHub 提交 UUID、私钥、节点或真实 IP。
+
+**客户端兼容性：** Loon 官方文档支持 transport=tcp、flow=xtls-rprx-vision、public-key、short-id、over-tls=true、sni。实际能否连接还取决于 Loon 客户端是否兼容当前 Xray REALITY 的握手要求。二维码或链接导入成功不等于连接成功，应使用 iPhone 蜂窝网络实测。
+
+官方资料：
+- https://github.com/XTLS/Xray-examples/tree/main/VLESS-TCP-XTLS-Vision-REALITY
+- https://nsloon.app/docs/Node/
+- https://xtls.github.io/en/config/transports/reality.html
