@@ -386,6 +386,8 @@ def add_execute(bot, chat_id, name, proto, tuic=None):
     name = check_device(name)
     if proto not in ("hy2", "tuic", "both"):
         raise ValueError("新增只支持 HY2、TUIC")
+    if proto in ("tuic", "both") and tuic is None:
+        raise RuntimeError("TUIC 管理器不可用，未修改任何账号")
     lines = [f"设备：{name}"]
     created = []
     if proto in ("hy2", "both"):
@@ -509,13 +511,15 @@ def update_check_worker(bot, chat_id, mid):
                 esc(str(exc)[:400]), [home_row()], mid)
 
 
-def issue_confirm(bot, chat_id, mid, op, proto, name=None):
+def issue_confirm(bot, chat_id, mid, op, proto, name=None, tuic=None):
     if op == "del":
+        if proto == "tuic" and tuic is None:
+            raise ValueError("TUIC 管理器不可用")
         if proto not in MANAGED or not name:
             raise ValueError("仅 HY2/TUIC 支持删除")
         name = check_device(name)
         # Fail closed: do not offer an approval for a missing account.
-        if name not in proto_clients(bot, proto, tuic_manager()):
+        if name not in proto_clients(bot, proto, tuic):
             raise ValueError("设备不存在：" + name)
         title = "⚠ CHBVPS · 删除确认"
         body = f"协议  {DESCRIPTIONS[proto]}\n设备  <code>{esc(name)}</code>\n\n删除后该账号的节点将立即失效。"
@@ -569,15 +573,6 @@ def take_pending(token, chat_id, mid, consume=True):
         if consume:
             PENDING.pop(token, None)
         return value
-
-
-def tuic_manager():
-    # Only used in callback paths when a dual-protocol module is installed.
-    try:
-        import dual_bot
-        return dual_bot.manage
-    except ImportError:
-        return None
 
 
 def sudo_run(args, timeout=55):
@@ -730,11 +725,11 @@ def handle_message(message, bot, tuic=None):
         elif command == "/del":
             if not args: del_menu(bot, chat_id)
             elif len(args) == 1: del_menu(bot, chat_id, args[0])
-            elif len(args) == 2: issue_confirm(bot, chat_id, None, "del", args[1].lower(), args[0])
+            elif len(args) == 2: issue_confirm(bot, chat_id, None, "del", args[1].lower(), args[0], tuic)
             else: raise ValueError("用法：/del 设备 [hy2|tuic]")
         elif command == "/restart":
             if not args: restart_menu(bot, chat_id)
-            elif len(args) == 1: issue_confirm(bot, chat_id, None, "rst", args[0].lower())
+            elif len(args) == 1: issue_confirm(bot, chat_id, None, "rst", args[0].lower(), tuic=tuic)
             else: raise ValueError("用法：/restart [hy2|tuic|vision|xhttp|all]")
         elif command == "/update":
             if args: raise ValueError("用法：/update")
@@ -784,9 +779,9 @@ def handle_callback(query, bot, tuic=None):
         elif action == "ask" and len(parts) in (4, 5):
             op = parts[2]
             if op=="del" and len(parts)==5:
-                issue_confirm(bot, chat_id, mid, op, parts[4], parts[3])
+                issue_confirm(bot, chat_id, mid, op, parts[4], parts[3], tuic)
             elif op in ("rst", "upd") and len(parts)==4:
-                issue_confirm(bot, chat_id, mid, op, parts[3])
+                issue_confirm(bot, chat_id, mid, op, parts[3], tuic=tuic)
             else: raise ValueError("无效确认请求")
         elif action in ("do", "cancel") and len(parts)==3:
             pending = take_pending(parts[2], chat_id, mid)
