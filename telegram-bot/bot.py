@@ -4,12 +4,15 @@ import json
 import os
 import re
 import socket
+import sys
 import subprocess
 import time
 import uuid
 from datetime import datetime
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+
+import v2_ui
 
 TOKEN=os.environ["BOT_TOKEN"].strip()
 ADMIN_ID=int(os.environ["ADMIN_USER_ID"])
@@ -22,27 +25,7 @@ XRAY_CLIENTS_DIR="/var/lib/hy2-telegram/xray/clients"
 VISION_CLIENTS_DIR="/var/lib/hy2-telegram/vision/clients"
 XRAY_BIN="/usr/local/bin/xray"
 BOT_API="https://api.telegram.org/bot"+TOKEN
-COMMANDS=[
-    {"command":"start","description":"完整状态和设备概览"},
-    {"command":"status","description":"查看服务器实时状态"},
-    {"command":"devices","description":"查看设备在线情况和独立流量"},
-    {"command":"add","description":"添加设备，例如 /add WIN-PC"},
-    {"command":"add_defaults","description":"发送全部设备节点链接和二维码"},
-    {"command":"get","description":"获取设备链接和二维码"},
-    {"command":"xall","description":"获取全部 XHTTP REALITY 节点"},
-    {"command":"xget","description":"获取 Xray 指定设备节点和二维码"},
-    {"command":"xstatus","description":"查看 XHTTP REALITY 服务状态"},
-    {"command":"vstatus","description":"查看 Vision TCP 服务状态"},
-    {"command":"vall","description":"发送全部 Vision 节点及二维码"},
-    {"command":"vget","description":"获取 Vision 设备节点及二维码"},
-    {"command":"node","description":"获取指定设备节点链接"},
-    {"command":"qr","description":"获取指定设备二维码"},
-    {"command":"delete","description":"删除设备（需要二次确认）"},
-    {"command":"traffic","description":"查看服务器总流量"},
-    {"command":"restart","description":"重启 HY2（需要二次确认）"},
-    {"command":"help","description":"显示命令帮助"},
-]
-
+COMMANDS=list(v2_ui.COMMANDS)
 try:
     time.tzset()
 except AttributeError:
@@ -511,6 +494,8 @@ def handle_message(message):
     command=parts[0].split("@",1)[0].lower()
     args=parts[1:]
     chat_id=chat["id"]
+    if v2_ui.handle_message(message, sys.modules[__name__]):
+        return
     try:
         if command=="/start":
             send_message(chat_id,status_text())
@@ -590,12 +575,7 @@ def handle_message(message):
             if len(args)!=1:
                 send_message(chat_id,"用法：/delete WIN-PC")
                 return
-            name=args[0].upper()
-            keyboard={"inline_keyboard":[[
-                {"text":"确认删除 "+name,"callback_data":"delete:confirm:"+name},
-                {"text":"取消","callback_data":"delete:cancel"},
-            ]]}
-            send_message(chat_id,f"⚠️ 确认删除设备 {name}？该设备凭据将失效。HY2 会重启一次，其他设备连接会短暂中断。",keyboard)
+            v2_ui.del_menu(sys.modules[__name__], chat_id, args[0])
             return
         if command=="/traffic":
             tx,rx=traffic_totals()
@@ -631,7 +611,12 @@ def handle_callback(query):
     if not authorized(user,chat):
         return
     data=query.get("data","")
+    if v2_ui.handle_callback(query, sys.modules[__name__]):
+        return
     telegram("answerCallbackQuery",{"callback_query_id":query["id"]})
+    if data in ("restart:confirm", "delete:cancel", "restart:cancel") or data.startswith("delete:confirm:"):
+        send_message(chat["id"], "旧确认按钮已失效。请使用 /restart 或 /del 重新发起操作。")
+        return
     if data in ("restart:cancel","delete:cancel"):
         send_message(chat["id"],"已取消操作。")
         return
