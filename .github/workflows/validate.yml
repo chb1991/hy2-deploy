@@ -12,12 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
-        run: bash -n install.sh core-update.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh tuic/install.sh xray-xhttp/install.sh xray-xhttp/smoke.sh xray-vision/install.sh xray-vision/smoke.sh telegram-bot/upgrade-v2.sh
+        run: bash -n install.sh core-update.sh telegram-bot/install.sh telegram-bot/upgrade-devices.sh tuic/install.sh xray-xhttp/install.sh xray-xhttp/smoke.sh xray-vision/install.sh xray-vision/smoke.sh telegram-bot/upgrade-v2.sh telegram-bot/install-traffic.sh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
       - name: Check Python syntax
-        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py telegram-bot/dual_bot.py telegram-bot/v2_ui.py telegram-bot/test_v2_ui.py tuic/users.py xray-vision/configure.py xray-vision/refresh-loon.py xray-vision/test_refresh.py
+        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py telegram-bot/dual_bot.py telegram-bot/v2_ui.py telegram-bot/test_v2_ui.py telegram-bot/traffic_quota.py telegram-bot/test_traffic_quota.py tuic/users.py xray-vision/configure.py xray-vision/refresh-loon.py xray-vision/test_refresh.py
       - name: Smoke test XHTTP REALITY config against official Xray binary
         run: bash xray-xhttp/smoke.sh
       - name: Smoke test Vision REALITY config and Loon client lines
@@ -26,5 +26,7 @@ jobs:
         run: python -m unittest discover -s telegram-bot -p test_vision.py -v
       - name: Test V2 Telegram UI routing and privileged action approval
         run: python -m unittest discover -s telegram-bot -p test_v2_ui.py -v
+      - name: Test VPS-wide traffic reset-on-16 and Telegram quota alerts
+        run: python -m unittest discover -s telegram-bot -p test_traffic_quota.py -v
       - name: Test safe Loon fingerprint refresh
         run: python -m unittest discover -s xray-vision -p test_refresh.py -v
