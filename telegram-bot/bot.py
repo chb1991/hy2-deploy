@@ -578,16 +578,8 @@ def handle_message(message):
             v2_ui.del_menu(sys.modules[__name__], chat_id, args[0])
             return
         if command=="/traffic":
-            tx,rx=traffic_totals()
-            count,accounts=online_totals()
-            send_message(chat_id,
-                "🚦 HY2 总流量统计\n\n"
-                f"📤 上传：{fmt_bytes(tx)}\n"
-                f"📥 下载：{fmt_bytes(rx)}\n"
-                f"📊 合计：{fmt_bytes(tx+rx)}\n"
-                f"🌐 在线设备实例：{count}\n"
-                f"👤 在线账号：{accounts}\n\n"
-                "流量为 Hysteria 当前进程累计统计，重启服务后可能重新累计。")
+            # Legacy alias now reports the entire VPS billing-cycle traffic.
+            v2_ui.menu_status(sys.modules[__name__], chat_id)
             return
         if command=="/restart":
             keyboard={"inline_keyboard":[[
