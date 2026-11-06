@@ -6,7 +6,9 @@ to existing, root-owned helpers through a tightly scoped sudo policy.
 """
 import html
 import json
+import json
 import os
+from pathlib import Path
 import re
 import secrets
 import socket
@@ -44,6 +46,8 @@ SERVICES = {
     "xhttp": ("xray.service", "TCP", 443),
 }
 DESCRIPTIONS = {"hy2": "HY2", "tuic": "TUIC", "vision": "Vision", "xhttp": "XHTTP"}
+TRAFFIC_SNAPSHOT = Path("/var/lib/hy2-telegram/traffic/quota.json")
+GIB = 1024 ** 3
 
 
 def esc(value):
@@ -132,6 +136,95 @@ def state_line(proto):
     return f"{symbol} <b>{DESCRIPTIONS[proto]}</b>  <code>{detail}</code>"
 
 
+
+def gb(n):
+    return f"{int(n) / GIB:.2f} GB"
+
+
+def read_quota_snapshot(path=None):
+    """Safely consume a root-produced, read-only vnStat snapshot."""
+    p = path or TRAFFIC_SNAPSHOT
+    try:
+        with p.open(encoding="utf-8") as f:
+            doc = json.load(f)
+        if doc.get("schema") != 1 or not isinstance(doc.get("complete"), bool):
+            return {"unavailable": True, "note": "统计文件格式不正确"}
+        age = time.time() - int(doc["sampled_at"])
+        if age < -300 or age > 20 * 60:
+            return {"unavailable": True, "note": "统计数据超过20分钟未更新"}
+        return doc
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
+def quota_home_line():
+    q = read_quota_snapshot()
+    if not q:
+        return "◈ 流量  未启用整机监控"
+    if q.get("unavailable"):
+        return "◈ 流量  暂不可用"
+    try:
+        if not q["complete"]:
+            return "◈ 流量  已启用（本周期统计不完整）"
+        return f"◈ 流量  {gb(q['used_bytes'])} / 500 GB（{q['percent']:.1f}%）"
+    except (KeyError, ValueError, TypeError):
+        return "◈ 流量  暂不可用"
+
+
+def quota_status_lines():
+    q = read_quota_snapshot()
+    if not q:
+        return ["整机流量监控尚未启用。", "ⓘ 可使用 CHBVPS vnStat 安装器启用。"]
+    if q.get("unavailable"):
+        return ["⚪ 流量统计暂不可用", "ⓘ " + esc(q.get("note", "无有效数据"))]
+    try:
+        start = esc(q["cycle_start"])
+        end = esc(q["next_reset"])
+        ifaces = esc(", ".join(q["interfaces"]))
+        lines = [
+            f"计费区间  <code>{start} — {end}</code>（不含结束日）",
+            f"配额  <b>500 GB</b>（按 1024³ 字节）",
+            f"网卡  <code>{ifaces}</code>",
+            "",
+            "<b>今日全网卡流量</b>",
+            f"↑ 上传  {gb(q['today']['tx'])}",
+            f"↓ 下载  {gb(q['today']['rx'])}",
+            "",
+            "<b>本周期整机流量</b>",
+            f"↑ 上传  {gb(q['cycle']['tx'])}",
+            f"↓ 下载  {gb(q['cycle']['rx'])}",
+            f"Σ 已记录  {gb(q['used_bytes'])}",
+        ]
+        if q["complete"]:
+            pct = float(q["percent"])
+            fill = max(0, min(10, int(pct / 10 + 0.5)))
+            lines.extend([
+                f"剩余额度（估算）  {gb(q['remaining_bytes'])}",
+                f"使用率  <b>{pct:.1f}%</b>",
+                "▓" * fill + "░" * (10 - fill),
+            ])
+        else:
+            lines.extend([
+                "⚪ <b>本周期统计不完整</b>",
+                "不显示不可靠的剩余额度/比例，暂不发送配额预警。",
+            ])
+        lines.extend([
+            "",
+            "<b>自 vnStat 记录以来（本机）</b>",
+            f"↑ 上传  {gb(q['lifetime']['tx'])}",
+            f"↓ 下载  {gb(q['lifetime']['rx'])}",
+            "",
+            "ⓘ 网卡双向流量包含系统通信，不等于搬瓦工后台计费。",
+            "ⓘ 每月16日按服务器本地日期开始新周期；实际服务商重置时刻可能不同。",
+            f"更新时间  <code>{esc(q['sampled_local'])}</code>",
+        ])
+        if not q["complete"]:
+            lines.append("ⓘ " + esc(q.get("note", "首次采集尚未覆盖完整周期")))
+        return lines
+    except (KeyError, ValueError, TypeError, OverflowError):
+        return ["⚪ 当前统计数据不完整，请检查监控服务。"]
+
+
 def menu_home(bot, chat_id, mid=None):
     lines = [
         "<b>◈ 服务状态</b>", DIVIDER,
@@ -143,6 +236,7 @@ def menu_home(bot, chat_id, mid=None):
     if mem.get("MemTotal"):
         used = max(0, mem["MemTotal"] - mem.get("MemAvailable", 0))
         lines.append(f"内存  {bot.mb(used):.0f} / {bot.mb(mem['MemTotal']):.0f} MB")
+    lines.extend(["", quota_home_line()])
     rows = [
         [button("◈ 实时状态", "ui:nav:status"), button("◇ 获取节点", "ui:nav:get", "primary")],
         [button("▣ 设备管理", "ui:nav:devices"), button("↥ 核心更新", "ui:nav:update")],
@@ -166,15 +260,6 @@ def menu_status(bot, chat_id, mid=None):
         online_text = f"{online} 个连接实例（{accounts} 个账号）"
     except Exception:
         online_text = "统计不可用"
-    try:
-        tx, rx = bot.traffic_totals()
-        traffic = (
-            f"↑ 上传  {bot.fmt_bytes(tx)}\n"
-            f"↓ 下载  {bot.fmt_bytes(rx)}\n"
-            f"Σ 合计  {bot.fmt_bytes(tx + rx)}"
-        )
-    except Exception:
-        traffic = "统计 API 暂不可用"
     lines = [
         "<b>系统资源</b>", DIVIDER,
         f"⏱ 运行  {esc(bot.uptime_text())}",
@@ -183,13 +268,13 @@ def menu_status(bot, chat_id, mid=None):
         f"Swap  {bot.mb(swap_used):.0f} / {bot.mb(swap_total):.0f} MB",
         "", "<b>服务状态</b>", DIVIDER,
         *(state_line(p) for p in PROTOS),
-        "", "<b>HY2 流量（本次服务运行周期）</b>", DIVIDER,
-        traffic, f"HY2 在线  {online_text}",
-        "", "ⓘ TUIC / Vision / XHTTP 暂无统一实时流量或在线数据。",
-        "ⓘ 本机监听不等于公网连通。",
+        "", "<b>整机流量 · 500GB / 每月16日重置</b>", DIVIDER,
+        *quota_status_lines(),
+        "", f"HY2 在线  {online_text}",
+        "ⓘ 其他协议暂无可靠在线人数统计；本机监听不代表公网可连接。",
     ]
     rows = [
-        [button("↻ 刷新", "ui:nav:status"), button("▣ 设备流量", "ui:dev:hy2")],
+        [button("↻ 刷新", "ui:nav:status"), button("▣ 设备列表", "ui:nav:devices")],
         home_row(),
     ]
     return present(bot, chat_id, "◈ CHBVPS · 实时状态", "\n".join(lines), rows, mid)
@@ -255,22 +340,14 @@ def menu_device_proto(bot, chat_id, proto, mid=None, tuic=None):
     if proto == "hy2":
         try:
             online = bot.online_data()
-            traffic = bot.traffic_data()
             available = True
         except Exception:
-            online, traffic, available = {}, {}, False
+            online, available = {}, False
         for name in names:
             n = int(online.get(name.lower(), 0) or 0)
-            item = traffic.get(name.lower(), {})
-            if not isinstance(item, dict):
-                item = {}
-            tx, rx = int(item.get("tx", 0) or 0), int(item.get("rx", 0) or 0)
             status = ("🟢 在线 " + str(n)) if n else ("⚪ 离线" if available else "⚪ 未知")
             lines.append(f"<b>{esc(name)}</b>  {status}")
-            if available:
-                lines.append(f"  ↑ {bot.fmt_bytes(tx)}  ↓ {bot.fmt_bytes(rx)}")
-                lines.append(f"  Σ {bot.fmt_bytes(tx + rx)}")
-        lines.append("\nⓘ HY2 流量仅为当前统计周期，不代表历史累计。")
+        lines.append("\nⓘ 设备页仅展示在线状态；所有协议的流量统一在 /status 中统计。")
     else:
         lines.extend(f"• <code>{esc(n)}</code>" for n in names)
         lines.append("\nⓘ 当前不提供此协议的可靠在线人数统计。")
