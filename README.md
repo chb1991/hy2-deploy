@@ -287,3 +287,18 @@ curl -fsSL -o /root/install-vision.sh https://raw.githubusercontent.com/chb1991/
 - https://github.com/XTLS/Xray-examples/tree/main/VLESS-TCP-XTLS-Vision-REALITY
 - https://nsloon.app/docs/Node/
 - https://xtls.github.io/en/config/transports/reality.html
+
+### Loon TLS 指纹自动刷新
+
+现有 Vision 节点在 Loon 中需要指定 TLS 指纹时，生成器现已为二维码、VLESS URI 设置 fp=chrome147 与 Loon 专用提示 tls-profile=chrome147，并在 loon.txt 中使用官方支持的 tls-profile=chrome147。
+
+注意：Loon 官方文档列出的名称是 chrome 和 chrome147，没有独立列出 chrome-14。chrome147 并不一定等价于客户端 UI 中的 X25519 握手标注。VLESS URI 额外提示可能被第三方客户端忽略，因此扫码导入后仍需在 Loon 检查 TLS 指纹是否正确。
+
+对于已安装的 Vision，绝对不要再次运行安装器覆盖现有 UUID；执行这一条命令更新四个设备的节点链接及二维码：
+
+~~~bash
+curl -fsSL -o /root/refresh-vision-loon.py https://raw.githubusercontent.com/chb1991/hy2-deploy/main/xray-vision/refresh-loon.py && python3 /root/refresh-vision-loon.py
+~~~
+
+刷新脚本会先核对 server JSON 中的四个 UUID 和现有节点链接，按原权限保留身份信息，仅更新 node.txt、loon.txt、node-qr.png，自动备份至 /root/vision-backups。不会修改 Xray/HY2/TUIC 配置，不重启任何服务。Telegram 重新执行 /vget IPHONE 就能获取更新后的二维码和链接。
+
