@@ -256,10 +256,10 @@ class V2Tests(unittest.TestCase):
 
     def test_dual_protocol_commands_are_handled_by_shared_ui(self):
         import dual_bot
-        with mock.patch.object(dual_bot, "manage", side_effect=self.tuic):
+        with mock.patch.object(ui, "handle_message", return_value=True) as handler:
             dual_bot.handle_message(message("/start"))
-        # The live dual adapter passes bot module; network sending is tested
-        # separately through the isolated Backend object above.
+            self.assertEqual(handler.call_count, 1)
+            self.assertIs(handler.call_args.kwargs["tuic"], dual_bot.manage)
 
 
 if __name__ == "__main__":
