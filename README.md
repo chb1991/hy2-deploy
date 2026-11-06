@@ -236,6 +236,8 @@ curl -fsSL -o /root/install-xhttp.sh https://raw.githubusercontent.com/chb1991/h
 2. REALITY 目标域名：必须支持 TLS 1.3 与 HTTP/2；脚本使用 openssl 验证。此域名是 REALITY 握手目标，不必是你的自有域名。
 3. 确认安装官方 Xray-core v26.10.31。
 
+REALITY 目标不要使用自己的节点连接域名，也应避开官方核心明确警告的高风险目标（例如 Apple、Microsoft、iCloud 等）。脚本使用 Xray 官方配置检查，在检测到相关风险警告时停止安装并提示更换目标。若安装中断，脚本可识别自己上一次安装留下的受限标记并恢复，不会覆盖无关的已有 Xray 服务。
+
 使用 XTLS/Xray-install 官方安装器和 XTLS/Xray-examples 官方示例格式。自动生成 WIN-PC、MACBOOK、IPHONE、FAMILY 四套独立 UUID、随机 XHTTP path、REALITY 公私钥和 Short ID；通过 Xray 官方 run -test 检查配置后再启动。不会修改现有 Hysteria 配置、密码、UDP 端口或 Cloudflare DNS。
 
 安装成功后，复用原 Telegram Bot；新增命令：

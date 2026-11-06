@@ -37,7 +37,7 @@ fi
 
 printf '准备安装 Xray VLESS + XHTTP + REALITY（TCP 443）。HY2 UDP 443 不变。\n'
 read -r -p '节点连接地址（灰云域名或 VPS IP）： ' ADDRESS
-read -r -p 'REALITY 目标域名（须支持 TLS1.3 与 H2，例如 www.microsoft.com）： ' SNI
+read -r -p 'REALITY 目标域名（支持 TLS1.3/H2；避免 Apple/Microsoft/iCloud 等高风险目标）： ' SNI
 python3 - "$ADDRESS" "$SNI" <<'PY'
 import ipaddress,sys
 address,sni=sys.argv[1:]
@@ -52,6 +52,9 @@ except ValueError:
 if not domain(sni): sys.exit('REALITY 目标域名格式不正确')
 if address.lower()==sni.lower():
     sys.exit('REALITY 目标不得与当前 VPS 的连接地址相同，请选用独立的第三方 TLS 目标。')
+parts=sni.lower().split('.')
+if any(x in ('apple','icloud','microsoft') for x in parts) or parts[-1] in ('cn','ru','ir'):
+    sys.exit('该 REALITY 目标可能触发 Xray 的封锁风险警告，请更换目标网站。')
 PY
 printf '验证目标 TLS1.3 + H2 支持情况……\n'
 result=$(timeout 15 openssl s_client -connect "$SNI:443" -servername "$SNI" -tls1_3 -alpn h2 </dev/null 2>&1 || true)
@@ -127,7 +130,15 @@ for name in WIN-PC MACBOOK IPHONE FAMILY; do
   chmod 640 "$target/node-qr.png"
 done
 
-$XRAY run -test -config "$CONF" || fail 'Xray 官方配置校验失败。'
+if ! "$XRAY" run -test -config "$CONF" >"$TMP/xray-test.log" 2>&1; then
+  cat "$TMP/xray-test.log" >&2
+  fail 'Xray 官方配置校验失败。'
+fi
+if grep -qi 'will increase the likelihood of your server' "$TMP/xray-test.log"; then
+  cat "$TMP/xray-test.log" >&2
+  fail 'REALITY 目标触发 Xray 官方封锁风险警告。请重新运行脚本并更换目标。'
+fi
+grep -Fq 'Configuration OK.' "$TMP/xray-test.log" || fail '没有检测到官方 Configuration OK 确认。'
 systemctl daemon-reload
 systemctl enable xray.service
 # The upstream installer starts Xray with an empty default config. Explicit

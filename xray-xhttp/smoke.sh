@@ -25,7 +25,7 @@ PUBLIC=$(printf '%s\n' "$keys" | sed -nE 's/^(Password( \(PublicKey\))?|PublicKe
   exit 1
 }
 ADDRESS=proxy.example.com
-SNI=www.microsoft.com
+SNI=www.example.org
 SID=0123456789abcdef
 XPATH=/a1b2c3d4e5f6
 UUIDS=''
