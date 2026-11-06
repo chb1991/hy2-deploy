@@ -26,9 +26,9 @@ cleanup() {
   trap - EXIT
   if (( code != 0 && DONE == 0 )); then
     printf '\n[Vision] 仅回滚新 Vision；原 HY2、XHTTP、TUIC 不修改。\n' >&2
-    if (( BOT_UPDATED )); then
-      install -o root -g root -m 755 "$TMP/bot.backup" "$BOT"
-      if (( DUAL_UPDATED )); then install -o root -g root -m 755 "$TMP/dual.backup" "$DUAL"; fi
+    if (( BOT_UPDATED || DUAL_UPDATED )); then
+      if (( BOT_UPDATED )); then install -o root -g root -m 755 "$TMP/bot.backup" "$BOT" || true; fi
+      if (( DUAL_UPDATED )); then install -o root -g root -m 755 "$TMP/dual.backup" "$DUAL" || true; fi
       systemctl restart hy2-telegram.service || true
     fi
     if (( SERVICE_CREATED )); then
