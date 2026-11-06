@@ -302,3 +302,36 @@ curl -fsSL -o /root/refresh-vision-loon.py https://raw.githubusercontent.com/chb
 
 刷新脚本会先核对 server JSON 中的四个 UUID 和现有节点链接，按原权限保留身份信息，仅更新 node.txt、loon.txt、node-qr.png，自动备份至 /root/vision-backups。不会修改 Xray/HY2/TUIC 配置，不重启任何服务。Telegram 重新执行 /vget IPHONE 就能获取更新后的二维码和链接。
 
+## CHBVPS Bot V2.0 · 免费极简界面（仅升级 Telegram 机器人）
+
+已部署 HY2/TUIC/XHTTP/Vision 的 Debian 13 VPS 可以使用 V2 安全升级器。该升级器只更新 `/opt/hy2-telegram` 中的机器人代码与精确限定的 sudo 权限，不修改代理服务、密钥、UUID、端口、域名或 TLS 证书，也不重启任何代理核心。复用已有 Telegram Bot Token 和管理员数字 ID。
+
+一行 SSH 安装命令（root，交互式确认；不要使用 curl | bash）：
+
+~~~bash
+curl -fsSL -o /root/upgrade-chbvps-v2.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/upgrade-v2.sh && bash /root/upgrade-chbvps-v2.sh
+~~~
+
+可见命令共 9 个：`/start`、`/help`、`/status`、`/devices [协议]`、`/get [设备] [协议]`、`/add <设备> [协议]`、`/del <设备> [协议]`、`/restart [协议]`、`/update`。菜单采用免费 Unicode 线条符号、固定状态指示和 Telegram 原生 `primary/success/danger` 按钮风格，无需 Telegram Premium，自定义 Premium 图标不使用。
+
+操作示例：
+
+~~~text
+/get IPHONE            # 四协议现有链接，二维码按钮按需发送
+/get IPHONE vision     # Vision 单协议链接
+/devices hy2           # HY2 在线与当前服务周期流量
+/devices tuic          # TUIC 账号列表，不虚报在线数量
+/add IPAD              # 选择 HY2/TUIC/两者
+/add IPAD hy2          # 只新增 HY2
+/del IPAD hy2          # 二次确认删除
+/restart all           # 二次确认，顺序重启四协议
+/update                # 检查与选择更新 HY2/sing-box，不自动升级 Xray
+~~~
+
+原有 `/vget`、`/xget`、`/get_tuic`、`/qr`、`/delete`、`/add_defaults` 等命令依然兼容，但从 `/help` 及 Telegram 命令下拉菜单隐藏。**旧消息里的删除、重启、升级确认按钮不再允许直接执行**，必须使用新的命令重新发起并通过一次性确认。
+
+安全特性：管理员私聊校验、`callback_data` 64 字节限制、短时且单次有效的随机确认令牌（绑定管理员聊天及确切消息 ID）、危险操作明确反馈、按协议只允许 HY2/TUIC 动态增删、四协议状态及本机端口检测、按需发送现有节点/二维码。HY2 流量严格标注为当前服务统计周期；TUIC/Vision/XHTTP 不虚构在线数据。升级器为原机器人与 sudo 规则在 `/root/chbvps-bot-backups/` 生成备份，失败时尽力自动恢复。Telegram 私聊不是端到端加密，切勿公开分享节点链接。
+
+升级前要求：`hy2-telegram.service` 已在运行，现有 `/usr/local/sbin/core-update` 与 `/usr/local/sbin/hy2-restart` 存在，并保留原有管理员 Bot Token 配置。新脚本会更新机器人服务所使用的 `bot.py`、`dual_bot.py`（若存在）和 `v2_ui.py`，仅重启 `hy2-telegram.service`，不会重启 HY2/TUIC/Vision/XHTTP。安装后在 Telegram 发送 `/start` 验证按钮。
+
+源代码：`telegram-bot/v2_ui.py`；回归测试：`telegram-bot/test_v2_ui.py`。GitHub Actions 通过不等于真实 Telegram API / VPS 端到端测试。首次实际升级后应检查 `systemctl is-active hy2-telegram` 与 Telegram 私聊按钮功能。
