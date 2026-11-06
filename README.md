@@ -269,7 +269,7 @@ curl -fsSL -o /root/install-vision.sh https://raw.githubusercontent.com/chb1991/
 3. TCP 端口：默认 8443；若已占用可选另一个 1024–65535 的端口。
 4. 输入 y 确认创建服务、四套独立 UUID 及更新原 Telegram 机器人。
 
-**网络：** Cloudflare 原 A 记录继续 DNS only（灰云），不必新建域名或申请证书；需要放行入站 **TCP 8443**（或你填写的端口）。TCP 443（XHTTP）、UDP 443（HY2）和 UDP 51443（TUIC，如有）不变。新服务采用独立 systemd，启动/停止不重启其他代理核心。安装器检测已有 Vision 时拒绝覆盖；安装中失败会尝试移除新 Vision 服务并恢复原 Telegram 文件。
+**网络：** Cloudflare 原 A 记录继续 DNS only（灰云），不必新建域名或申请证书；需要放行入站 **TCP 8443**（或你填写的端口）。TCP 443（XHTTP）、UDP 443（HY2）和 UDP 51443（TUIC，如有）不变。新服务采用独立 systemd，启动/停止不重启其他代理核心。安装器检测已有 Vision 时拒绝覆盖；安装中失败会尝试移除新 Vision 服务并恢复原 Telegram 文件。 安装器在修改机器人程序前将现有代码备份至 VPS 的 /root/vision-backups/，即使机器重启也保留备份供人工恢复。
 
 **Telegram：**
 
@@ -278,6 +278,8 @@ curl -fsSL -o /root/install-vision.sh https://raw.githubusercontent.com/chb1991/
 - /vget IPHONE：仅发送 iPhone 的 Vision 设备节点、Loon 配置和二维码。
 
 原有 HY2 /get、/add_defaults，XHTTP /xget、/xall 和 TUIC 扩展命令保持不变。Vision 服务端配置仅保存在 VPS 的 /usr/local/etc/xray/vision.json；四套私有客户端节点位于 /var/lib/hy2-telegram/vision/clients/。不在 GitHub 提交 UUID、私钥、节点或真实 IP。
+
+**Telegram 安全与验证：** 机器人原管理员数字 ID + 私聊校验不变，新增 /vstatus、/vall、/vget IPHONE；Vision 节点及二维码仅授权 root 与 hy2bot 用户组读取。Telegram Bot 私聊不是端到端加密，收到的节点链接属于凭据，请勿转发到群聊或公开分享。CI 已包含 Python 的 7 项离线机器人测试（单设备、四设备、非法设备、越权拒绝、TUIC 双协议转发和状态命令），但还未在实际 Telegram API 上进行端到端测试。
 
 **客户端兼容性：** Loon 官方文档支持 transport=tcp、flow=xtls-rprx-vision、public-key、short-id、over-tls=true、sni。实际能否连接还取决于 Loon 客户端是否兼容当前 Xray REALITY 的握手要求。二维码或链接导入成功不等于连接成功，应使用 iPhone 蜂窝网络实测。
 
