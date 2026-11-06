@@ -17,10 +17,12 @@ jobs:
         with:
           python-version: "3.x"
       - name: Check Python syntax
-        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py telegram-bot/dual_bot.py tuic/users.py xray-vision/configure.py
+        run: python -m py_compile telegram-bot/bot.py telegram-bot/hy2-users.py telegram-bot/dual_bot.py tuic/users.py xray-vision/configure.py xray-vision/refresh-loon.py xray-vision/test_refresh.py
       - name: Smoke test XHTTP REALITY config against official Xray binary
         run: bash xray-xhttp/smoke.sh
       - name: Smoke test Vision REALITY config and Loon client lines
         run: bash xray-vision/smoke.sh
       - name: Test Vision Telegram access control and dual-bot routing
         run: python -m unittest discover -s telegram-bot -p test_vision.py -v
+      - name: Test safe Loon fingerprint refresh
+        run: python -m unittest discover -s xray-vision -p test_refresh.py -v
