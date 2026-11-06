@@ -35,7 +35,6 @@ MAX_DEVICE = 32
 PENDING = {}
 PENDING_LOCK = threading.Lock()
 OPERATIONS_LOCK = threading.Lock()
-UPDATE_LOCK = threading.Lock()
 CONFIRM_TTL = 120
 CORE_UPDATE = "/usr/local/sbin/core-update"
 SERVICES = {
@@ -555,10 +554,12 @@ def issue_confirm(bot, chat_id, mid, op, proto, name=None, tuic=None):
                     "danger" if op in ("del", "rst") else "success"),
              button("× 取消", "ui:cancel:" + token)]]
     result = present(bot, chat_id, title, body + "\n\nⓘ 确认有效期 2 分钟。", rows, mid)
-    if mid is None and isinstance(result, dict):
+    if isinstance(result, dict) and result.get("message_id") is not None:
+        # An edit may fall back to sending a new message (old/deleted panel).
+        # Bind approval to the message that actually carries the buttons.
         with PENDING_LOCK:
             if token in PENDING:
-                PENDING[token]["mid"] = result.get("message_id")
+                PENDING[token]["mid"] = result["message_id"]
     return result
 
 
