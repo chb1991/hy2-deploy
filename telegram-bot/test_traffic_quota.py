@@ -24,6 +24,11 @@ def day(d):
 
 
 def iface(created=date(2026, 10, 15), current_gib=3, now=NOW):
+    start = date(2026, 10, 16)
+    dates = [start + timedelta(days=i) for i in range((now.date() - start).days + 1)]
+    records = [{"date": day(d), "tx": 0, "rx": 0} for d in dates]
+    records[0].update({"tx": current_gib * quota.GIB, "rx": quota.GIB})
+    records[-1].update({"tx": 2 * quota.GIB, "rx": quota.GIB})
     return {
         "name": "eth0",
         "created": {"date": day(created)},
@@ -32,8 +37,7 @@ def iface(created=date(2026, 10, 15), current_gib=3, now=NOW):
             "total": {"tx": 5 * quota.GIB, "rx": 2 * quota.GIB},
             "day": [
                 {"date": day(date(2026, 10, 15)), "tx": 55 * quota.GIB, "rx": 1},
-                {"date": day(date(2026, 10, 16)), "tx": current_gib * quota.GIB, "rx": quota.GIB},
-                {"date": day(date(2026, 11, 6)), "tx": 2 * quota.GIB, "rx": quota.GIB},
+                *records,
             ],
         },
     }
@@ -147,6 +151,20 @@ class QuotaTests(unittest.TestCase):
             quota.read_interface("eth0;bad")
         with self.assertRaises(ValueError):
             quota.local_cycle(date(2026, 11, 6), 31)
+
+    def test_missing_day_disables_quota_even_if_monitor_created_before_cycle(self):
+        item = iface()
+        item["traffic"]["day"] = [
+            d for d in item["traffic"]["day"]
+            if d["date"] != day(date(2026, 10, 25))
+        ]
+        snapshot = quota.collect(
+            {"interfaces": ["eth0"], "allowance_gib": 500},
+            now=NOW, reader=lambda _: item,
+        )
+        self.assertFalse(snapshot["complete"])
+        self.assertIn("缺少 1 天", snapshot["note"])
+        self.assertIsNone(snapshot["remaining_bytes"])
 
     def test_midcycle_future_date_does_not_count(self):
         item = iface()
