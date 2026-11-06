@@ -10,6 +10,7 @@ VISION_UNIT=/etc/systemd/system/xray-vision.service
 VISION_ROOT=/var/lib/hy2-telegram/vision
 BOT=/opt/hy2-telegram/bot.py
 DUAL=/opt/hy2-telegram/dual_bot.py
+V2_UI=/opt/hy2-telegram/v2_ui.py
 RAW=https://raw.githubusercontent.com/chb1991/hy2-deploy/main
 TMP="$(mktemp -d /tmp/vision-install.XXXXXXXX)"
 DONE=0
@@ -18,6 +19,7 @@ CONF_CREATED=0
 CREDS_CREATED=0
 BOT_UPDATED=0
 DUAL_UPDATED=0
+V2_UPDATED=0
 
 fail() { printf '\n[Vision 错误] %s\n' "$*" >&2; exit 1; }
 log() { printf '\n[Vision] %s\n' "$*"; }
@@ -26,7 +28,10 @@ cleanup() {
   trap - EXIT
   if (( code != 0 && DONE == 0 )); then
     printf '\n[Vision] 仅回滚新 Vision；原 HY2、XHTTP、TUIC 不修改。\n' >&2
-    if (( BOT_UPDATED || DUAL_UPDATED )); then
+    if (( BOT_UPDATED || DUAL_UPDATED || V2_UPDATED )); then
+      if (( V2_UPDATED )); then
+        if [[ -f "$TMP/v2.backup" ]]; then install -o root -g root -m 755 "$TMP/v2.backup" "$V2_UI" || true; else rm -f "$V2_UI"; fi
+      fi
       if (( BOT_UPDATED )); then install -o root -g root -m 755 "$TMP/bot.backup" "$BOT" || true; fi
       if (( DUAL_UPDATED )); then install -o root -g root -m 755 "$TMP/dual.backup" "$DUAL" || true; fi
       systemctl restart hy2-telegram.service || true
@@ -129,7 +134,8 @@ fi
 log "下载配置生成器与机器人扩展……"
 curl -fsSL --retry 3 "$RAW/xray-vision/configure.py" -o "$TMP/configure.py"
 curl -fsSL --retry 3 "$RAW/telegram-bot/bot.py" -o "$TMP/bot.py"
-python3 -m py_compile "$TMP/configure.py" "$TMP/bot.py"
+curl -fsSL --retry 3 "$RAW/telegram-bot/v2_ui.py" -o "$TMP/v2_ui.py"
+python3 -m py_compile "$TMP/configure.py" "$TMP/bot.py" "$TMP/v2_ui.py"
 grep -Fq 'if command=="/vget"' "$TMP/bot.py" || fail "机器人版本不支持 /vget。"
 if systemctl cat hy2-telegram.service | grep -Fq 'ExecStart=/usr/bin/python3 /opt/hy2-telegram/dual_bot.py'; then
   [[ -f "$DUAL" ]] || fail "TUIC 双协议机器人入口缺失。"
@@ -228,6 +234,9 @@ BACKUP_DIR="/root/vision-backups/$(date +%Y%m%d-%H%M%S)-$"
 install -d -o root -g root -m 700 "$BACKUP_DIR"
 cp -a "$BOT" "$TMP/bot.backup"
 cp -a "$BOT" "$BACKUP_DIR/bot.py"
+if [[ -f "$V2_UI" ]]; then cp -a "$V2_UI" "$TMP/v2.backup"; cp -a "$V2_UI" "$BACKUP_DIR/v2_ui.py"; fi
+V2_UPDATED=1
+install -o root -g root -m 755 "$TMP/v2_ui.py" "$V2_UI"
 if [[ -f "$TMP/dual_bot.py" ]]; then
   cp -a "$DUAL" "$TMP/dual.backup"
   cp -a "$DUAL" "$BACKUP_DIR/dual_bot.py"
