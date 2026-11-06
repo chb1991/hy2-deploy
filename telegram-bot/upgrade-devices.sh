@@ -33,11 +33,12 @@ install -o root -g hy2bot -m 640 /root/hy2-output/client.yaml /var/lib/hy2-teleg
 
 log "下载多设备管理程序……"
 curl -fsSL --retry 3 "$RAW/hy2-users.py" -o /usr/local/sbin/hy2-users
+curl -fsSL --retry 3 "$RAW/v2_ui.py" -o /opt/hy2-telegram/v2_ui.py
 curl -fsSL --retry 3 "$RAW/bot.py" -o /opt/hy2-telegram/bot.py
-python3 -m py_compile /usr/local/sbin/hy2-users /opt/hy2-telegram/bot.py
-chown root:root /usr/local/sbin/hy2-users /opt/hy2-telegram/bot.py
+python3 -m py_compile /usr/local/sbin/hy2-users /opt/hy2-telegram/bot.py /opt/hy2-telegram/v2_ui.py
+chown root:root /usr/local/sbin/hy2-users /opt/hy2-telegram/bot.py /opt/hy2-telegram/v2_ui.py
 chmod 750 /usr/local/sbin/hy2-users
-chmod 755 /opt/hy2-telegram/bot.py
+chmod 755 /opt/hy2-telegram/bot.py /opt/hy2-telegram/v2_ui.py
 
 log "更新受限 sudo 权限……"
 cat > /etc/sudoers.d/hy2-telegram <<'SUDO'
