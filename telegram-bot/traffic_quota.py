@@ -5,6 +5,7 @@ Root-only systemd timer (no provider API). Snapshot is readable by the existing
 hy2bot service account; bot never gains access to the provider credentials.
 """
 import argparse
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import fcntl
 import grp
 import json
@@ -22,6 +23,7 @@ STATE = Path("/var/lib/hy2-telegram/traffic")
 SNAPSHOT = STATE / "quota.json"
 ALERTS = STATE / "alerts.json"
 LOCK = STATE / "traffic.lock"
+CALIBRATION = STATE / "calibration.json"
 GIB = 1024 ** 3
 THRESHOLDS = (80, 90, 95, 100)
 
@@ -103,7 +105,82 @@ def updated_at(entry):
         raise MonitoringError("vnStat 更新时间不可用") from exc
 
 
-def collect(config, now=None, reader=read_interface):
+
+def calibration_amount(raw):
+    """Interpret 204.95G in the same binary GB unit as the 500G quota."""
+    try:
+        amount = Decimal(str(raw))
+        if not amount.is_finite() or not Decimal("0") <= amount <= Decimal("500"):
+            raise ValueError("校准值超出 0–500 GB 范围")
+        return int((amount * GIB).to_integral_value(rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError) as exc:
+        raise MonitoringError("人工校准流量必须是 0–500 GB 的有效数字") from exc
+
+
+def load_calibration():
+    try:
+        with CALIBRATION.open(encoding="utf-8") as f:
+            value = json.load(f)
+        if not isinstance(value, dict) or value.get("schema") != 1:
+            raise MonitoringError("人工校准文件格式无效，请不要清空校准记录")
+        return value
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, TypeError) as exc:
+        raise MonitoringError("人工校准记录无法读取，暂停配额统计") from exc
+
+
+def create_calibration(config, amount_gib, expected_cycle, expected_date=None,
+                       now=None, reader=read_interface, previous=None):
+    """Capture the immutable vnStat total counters at the manual baseline.
+
+    204.95 GiB is the *whole cycle* already billed at capture time, not an
+    extra amount to add to vnStat's earlier daily history.
+    """
+    if now is None:
+        now = datetime.now().astimezone()
+    if now.tzinfo is None:
+        raise MonitoringError("校准时间必须包含时区")
+    start, _ = local_cycle(now.date(), int(config.get("reset_day", 16)))
+    if expected_cycle != start.isoformat():
+        raise MonitoringError("当前计费周期与校准数据日期不匹配；禁止把上期用量套到新周期")
+    if expected_date and now.date().isoformat() != expected_date:
+        raise MonitoringError("人工流量数据对应 2026-11-06，请重新提供当前日期的已用量再校准")
+    amount_bytes = calibration_amount(amount_gib)
+    ifaces = config["interfaces"]
+    if not isinstance(ifaces, list) or not ifaces or len(set(ifaces)) != len(ifaces):
+        raise MonitoringError("校准网卡配置无效")
+    if previous is not None:
+        if (previous.get("cycle_start") == start.isoformat()
+                and previous.get("interfaces") == ifaces
+                and int(previous.get("base_used_bytes", -1)) == amount_bytes):
+            # Reinstalling must NOT zero the already accumulated post-anchor usage.
+            return previous
+        raise MonitoringError("已有人工校准记录，拒绝覆盖，以免丢失校准后的流量")
+    counters = {}
+    for iface in ifaces:
+        entry = reader(iface)
+        try:
+            counters[iface] = traffic_entry(entry["traffic"]["total"])
+            changed = updated_at(entry).replace(tzinfo=now.tzinfo)
+            if now - changed > timedelta(minutes=60) or changed - now > timedelta(minutes=10):
+                raise MonitoringError("无法校准：vnStat 网卡数据不是最近一小时的有效快照")
+        except (KeyError, TypeError) as exc:
+            raise MonitoringError("无法读取网卡总计数器，拒绝建立不可靠的校准点") from exc
+    return {
+        "schema": 1,
+        "cycle_start": start.isoformat(),
+        "base_used_bytes": amount_bytes,
+        "base_used_gib": str(Decimal(str(amount_gib))),
+        "captured_at": int(now.timestamp()),
+        "captured_local": now.isoformat(timespec="minutes"),
+        "interfaces": list(ifaces),
+        "counters": counters,
+        "source": "manual_user_report",
+    }
+
+
+def collect(config, now=None, reader=read_interface, calibration=None):
     if now is None:
         now = datetime.now().astimezone()
     if now.tzinfo is None:
@@ -120,6 +197,21 @@ def collect(config, now=None, reader=read_interface):
     today = {"tx": 0, "rx": 0}
     lifetime = {"tx": 0, "rx": 0}
     issues = []
+    calibrated = bool(calibration and calibration.get("cycle_start") == start.isoformat())
+    if calibrated:
+        if calibration.get("interfaces") != ifaces:
+            raise MonitoringError("校准后网卡列表发生变化，必须重新核对监控范围")
+        try:
+            captured_date = datetime.fromtimestamp(
+                int(calibration["captured_at"]), now.tzinfo
+            ).date()
+            if captured_date < start or captured_date > now.date():
+                raise ValueError("calibration date outside the cycle")
+            baseline = int(calibration["base_used_bytes"])
+            if baseline < 0:
+                raise ValueError("negative baseline")
+        except (KeyError, ValueError, TypeError, OverflowError) as exc:
+            raise MonitoringError("校准记录损坏，停止显示可能不准确的余额") from exc
     for iface in ifaces:
         row = reader(iface)
         try:
@@ -131,32 +223,52 @@ def collect(config, now=None, reader=read_interface):
         except (KeyError, TypeError) as exc:
             raise MonitoringError("vnStat 未提供必要统计字段：" + iface) from exc
         add(lifetime, totals)
-        if created > start:
-            issues.append(f"{iface} 的监控始于 {created.isoformat()}，晚于本期起点")
         if now - updated > timedelta(minutes=60) or updated - now > timedelta(minutes=10):
             issues.append(f"{iface} 的统计更新不及时")
         current_dates = set()
+        recorded = {"tx": 0, "rx": 0}
         for entry in days:
             entry_date = parse_day(entry["date"])
             counts = traffic_entry(entry)
             if start <= entry_date <= now.date():
-                add(period, counts)
+                add(recorded, counts)
                 current_dates.add(entry_date)
             if entry_date == now.date():
                 add(today, counts)
-        # Missing daily rows can mean the daemon was disabled during the
-        # billing period. Fail closed rather than under-reporting allowance.
-        expected_days = (now.date() - start).days + 1
-        if len(current_dates) < expected_days:
-            missing = expected_days - len(current_dates)
-            issues.append(f"{iface} 本周期缺少 {missing} 天的日统计记录")
+        if calibrated:
+            try:
+                base = traffic_entry(calibration["counters"][iface])
+            except (KeyError, TypeError) as exc:
+                raise MonitoringError("校准基线网卡计数器缺失") from exc
+            if totals["tx"] < base["tx"] or totals["rx"] < base["rx"]:
+                issues.append(f"{iface} 的 vnStat 数据库累计计数器已经重置")
+                continue
+            # Only count traffic AFTER the calibration snapshot. Never add
+            # the historical daily totals a second time.
+            period["tx"] += totals["tx"] - base["tx"]
+            period["rx"] += totals["rx"] - base["rx"]
+            # Day records are checked only after the anchor, not before it.
+            # TrafficlessEntries in vnStat normally creates zero-traffic days.
+            expected_days = (now.date() - captured_date).days
+            valid_days = sum(
+                captured_date < d <= now.date() for d in current_dates
+            )
+            if valid_days < expected_days:
+                issues.append(f"{iface} 校准后有 {expected_days - valid_days} 天缺少日统计")
+        else:
+            add(period, recorded)
+            if created > start:
+                issues.append(f"{iface} 的监控始于 {created.isoformat()}，晚于本期起点")
+            expected_days = (now.date() - start).days + 1
+            if len(current_dates) < expected_days:
+                issues.append(f"{iface} 本周期缺少 {expected_days - len(current_dates)} 天的日统计记录")
     is_complete = not issues
-    used = period["tx"] + period["rx"]
+    observed = period["tx"] + period["rx"]
+    used = observed + (baseline if calibrated else 0)
     limit = allowance * GIB
-    stamp = int(now.timestamp())
     result = {
         "schema": 1,
-        "sampled_at": stamp,
+        "sampled_at": int(now.timestamp()),
         "sampled_local": now.isoformat(timespec="minutes"),
         "timezone": now.strftime("%Z %z").strip() or str(now.utcoffset()),
         "interfaces": ifaces,
@@ -165,7 +277,11 @@ def collect(config, now=None, reader=read_interface):
         "next_reset": end.isoformat(),
         "reset_day": reset_day,
         "complete": is_complete,
+        "calibrated": calibrated,
+        "baseline_bytes": baseline if calibrated else 0,
+        "calibrated_at": calibration.get("captured_local") if calibrated else None,
         "note": ("; ".join(issues) if issues else
+                 "人工校准+vnStat网卡增量" if calibrated else
                  "本机网卡双向流量估算，非服务商计费 API；重置时间按服务器本地日期"),
         "today": today,
         "cycle": period,
@@ -269,6 +385,9 @@ def check_alerts(snapshot, sender=notify_telegram):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--notify", action="store_true", help="发送达到阈值的新提醒")
+    parser.add_argument("--calibrate", help="本计费周期当前已用的人工校准值（GB）")
+    parser.add_argument("--target-cycle", help="校准适用的计费周期起点，例如 2026-10-16")
+    parser.add_argument("--calibration-date", help="人工报告日期，例如 2026-11-06")
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise MonitoringError("需由 root 的 systemd 定时服务运行")
@@ -277,8 +396,21 @@ def main():
     with LOCK.open("a+") as lock:
         os.fchmod(lock.fileno(), 0o600)
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        existing = load_calibration()
+        if args.calibrate is not None:
+            if not args.target_cycle or not args.calibration_date:
+                raise MonitoringError("校准需要明确的周期及人工流量报告日期")
+            calibration = create_calibration(
+                config, args.calibrate, args.target_cycle, args.calibration_date,
+                previous=existing,
+            )
+            if existing is None:
+                write_json(CALIBRATION, calibration, 0o600)
+            print("CHBVPS 人工流量校准已保存（或已存在），校准值："
+                  + calibration["base_used_gib"] + " GB；校准后增量由 vnStat 统计。")
+            return
         try:
-            snapshot = collect(config)
+            snapshot = collect(config, calibration=existing)
         except (MonitoringError, ValueError) as exc:
             # Clear old snapshots on read errors: never show outdated "remaining".
             snapshot = {
