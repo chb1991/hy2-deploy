@@ -7,9 +7,11 @@ XRAY=/usr/local/bin/xray
 CONF=/usr/local/etc/xray/config.json
 BOT=/opt/hy2-telegram/bot.py
 DUAL=/opt/hy2-telegram/dual_bot.py
+V2_UI=/opt/hy2-telegram/v2_ui.py
 CLIENTS=/var/lib/hy2-telegram/xray/clients
 RAW=https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/bot.py
 RAW_DUAL=https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/dual_bot.py
+RAW_V2=https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/v2_ui.py
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 fail() { printf '[错误] %s\n' "$*" >&2; exit 1; }
@@ -76,7 +78,8 @@ apt-get update
 apt-get install -y --no-install-recommends curl openssl python3 qrencode ca-certificates
 # Validate both downloaded programs before modifying any Xray service.
 curl -fsSL --retry 3 "$RAW" -o "$TMP/bot.py"
-python3 -m py_compile "$TMP/bot.py"
+curl -fsSL --retry 3 "$RAW_V2" -o "$TMP/v2_ui.py"
+python3 -m py_compile "$TMP/bot.py" "$TMP/v2_ui.py"
 grep -Fq 'if command=="/xget"' "$TMP/bot.py" || fail '机器人版本缺少 /xget，已停止安装。'
 # Preserve optional TUIC dual-protocol command handling; update its adapter only
 # if the existing bot unit actually launches dual_bot.py.
@@ -175,6 +178,12 @@ done
 
 backup=$BOT.backup-xhttp-$(date +%Y%m%d-%H%M%S)
 cp -a "$BOT" "$backup"
+v2_backup=""
+if [[ -f "$V2_UI" ]]; then
+  v2_backup="$V2_UI.backup-xhttp-$(date +%Y%m%d-%H%M%S)"
+  cp -a "$V2_UI" "$v2_backup"
+fi
+install -o root -g root -m 755 "$TMP/v2_ui.py" "$V2_UI"
 if [[ -f "$TMP/dual_bot.py" ]]; then
   dual_backup=$DUAL.backup-xhttp-$(date +%Y%m%d-%H%M%S)
   cp -a "$DUAL" "$dual_backup"
@@ -186,6 +195,7 @@ if ! systemctl restart hy2-telegram.service; then
   if [[ -n "${dual_backup:-}" ]]; then
     install -o root -g root -m 755 "$dual_backup" "$DUAL"
   fi
+  if [[ -n "$v2_backup" ]]; then install -o root -g root -m 755 "$v2_backup" "$V2_UI"; else rm -f "$V2_UI"; fi
   systemctl restart hy2-telegram.service || true
   fail '机器人重启失败，已恢复旧版本。Xray 保持运行。'
 fi
@@ -195,6 +205,7 @@ if ! systemctl is-active --quiet hy2-telegram.service; then
   if [[ -n "${dual_backup:-}" ]]; then
     install -o root -g root -m 755 "$dual_backup" "$DUAL"
   fi
+  if [[ -n "$v2_backup" ]]; then install -o root -g root -m 755 "$v2_backup" "$V2_UI"; else rm -f "$V2_UI"; fi
   systemctl restart hy2-telegram.service || true
   fail '机器人未保持 active，已恢复旧版本。Xray 保持运行。'
 fi
