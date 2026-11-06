@@ -17,10 +17,22 @@ fail() { printf '[错误] %s\n' "$*" >&2; exit 1; }
 [[ -f /etc/hysteria/config.yaml && -f /etc/hy2-telegram/bot.env && -f "$BOT" ]] || fail '需要现有 HY2 + Telegram 机器人。'
 systemctl is-active --quiet hysteria-server.service || fail 'HY2 未运行。'
 systemctl is-active --quiet hy2-telegram.service || fail 'Telegram 未运行。'
-[[ ! -e "$XRAY" && ! -e "$CONF" ]] || fail '已有 Xray 安装，不会覆盖。'
+# A root-only marker permits recovery of this script's own interrupted installation.
+# An unrelated Xray installation is never modified.
+PENDING=/var/lib/hy2-telegram/.xhttp-install-pending
+RESUME=0
+if [[ -e "$XRAY" || -e "$CONF" ]] || systemctl cat xray.service >/dev/null 2>&1; then
+  [[ -f "$PENDING" && -x "$XRAY" && -f "$CONF" ]] || fail '检测到已有 Xray；不是本脚本的中断安装，拒绝覆盖。'
+  RESUME=1
+  printf '检测到前次 XHTTP 安装中断，将检查并继续完成。\n'
+fi
 if ss -H -ltn 'sport = :443' | grep -q .; then
-  ss -ltnp 'sport = :443' || true
-  fail 'TCP 443 已被占用，不会抢占端口。'
+  if (( RESUME )) && ss -H -ltnp 'sport = :443' | grep -q '"xray"'; then
+    printf 'TCP 443 由前次安装的 Xray 监听，可继续恢复。\n'
+  else
+    ss -ltnp 'sport = :443' || true
+    fail 'TCP 443 已被其他程序占用，脚本不会抢占端口。'
+  fi
 fi
 
 printf '准备安装 Xray VLESS + XHTTP + REALITY（TCP 443）。HY2 UDP 443 不变。\n'
@@ -48,8 +60,14 @@ read -r -p '确认安装官方 Xray v26.10.31 并接入已有 Telegram？[y/N]�
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends curl openssl python3 qrencode ca-certificates
+# Validate both downloaded programs before modifying any Xray service.
+curl -fsSL --retry 3 "$RAW" -o "$TMP/bot.py"
+python3 -m py_compile "$TMP/bot.py"
+grep -Fq 'if command=="/xget"' "$TMP/bot.py" || fail '机器人版本缺少 /xget，已停止安装。'
 curl -fsSL --retry 3 https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh -o "$TMP/install-release.sh"
 bash -n "$TMP/install-release.sh"
+# Keep this marker on errors so an interrupted installation can be retried.
+install -o root -g root -m 600 /dev/null "$PENDING"
 bash "$TMP/install-release.sh" install --version "$VERSION" --without-geodata --without-logfiles
 [[ -x "$XRAY" ]] || fail '官方 Xray 安装失败。'
 getent group xray >/dev/null || fail '官方 xray 用户组缺失。'
@@ -100,23 +118,26 @@ find /var/lib/hy2-telegram/xray -type d -exec chmod 750 {} +
 find /var/lib/hy2-telegram/xray -type f -exec chmod 640 {} +
 for name in WIN-PC MACBOOK IPHONE FAMILY; do
   target="$CLIENTS/$name"
-  qrencode -o "$target/node-qr.png" -s 8 -m 2 < "$target/node.txt"
+  qrencode -o "$target/node-qr.png" -s 8 -m 2 "$(cat "$target/node.txt")"
   chgrp hy2bot "$target/node-qr.png"
   chmod 640 "$target/node-qr.png"
 done
 
 $XRAY run -test -config "$CONF" || fail 'Xray 官方配置校验失败。'
 systemctl daemon-reload
-systemctl enable --now xray.service
+systemctl enable xray.service
+# The upstream installer starts Xray with an empty default config. Explicit
+# restart is essential to load the REALITY config written above.
+systemctl restart xray.service || {
+  journalctl -u xray.service -n 40 --no-pager >&2 || true
+  fail 'Xray 无法加载 REALITY 配置。'
+}
 sleep 2
-systemctl is-active --quiet xray.service || fail 'Xray 服务启动失败，请执行 journalctl -u xray -n 60。'
-ss -H -ltn 'sport = :443' | grep -q . || fail 'Xray 未监听 TCP 443。'
+systemctl is-active --quiet xray.service || fail 'Xray 服务未保持 active，请检查 journalctl -u xray。'
+ss -H -ltnp 'sport = :443' | grep -q '"xray"' || fail 'TCP 443 没有由 Xray 监听。'
 
 backup=$BOT.backup-xhttp-$(date +%Y%m%d-%H%M%S)
 cp -a "$BOT" "$backup"
-curl -fsSL --retry 3 "$RAW" -o "$TMP/bot.py"
-python3 -m py_compile "$TMP/bot.py"
-grep -Fq 'if command=="/xget"' "$TMP/bot.py" || fail '机器人代码缺少 /xget。'
 install -o root -g root -m 755 "$TMP/bot.py" "$BOT"
 if ! systemctl restart hy2-telegram.service || ! systemctl is-active --quiet hy2-telegram.service; then
   install -o root -g root -m 755 "$backup" "$BOT"
@@ -124,6 +145,7 @@ if ! systemctl restart hy2-telegram.service || ! systemctl is-active --quiet hy2
   fail '机器人更新失败，已恢复旧版本。Xray 保持运行。'
 fi
 if command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then ufw allow 443/tcp; fi
+rm -f "$PENDING"
 printf '\n完成：HY2 UDP 443、XHTTP REALITY TCP 443 已同时运行。\n'
 printf 'Telegram 命令：/xstatus  /xall  /xget IPHONE\n'
 printf '凭据目录：%s\n' "$CLIENTS"
