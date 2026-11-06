@@ -218,3 +218,33 @@ bash /root/install-hy2.sh
 - Cloudflare 模式必须 DNS only（灰云），并在服务商安全组放行入站 UDP 443。
 - 服务 active 和本机 UDP 监听不代表公网 UDP 一定可达，仍需用手机蜂窝网络实测。
 
+## 新增 TCP：VLESS + XHTTP + REALITY（可选）
+
+已经安装 HY2 与 Telegram 机器人的 Debian 13 x86_64 VPS，可额外安装官方 Xray-core（与 HY2 共存）。
+
+**严格前提：** HY2 UDP 443 继续使用；Xray 使用独立 TCP 443。如果现有 TCP 443 已被其他程序占用，脚本会拒绝安装，不会自动停止服务。若已安装 Xray/3x-ui，脚本也会拒绝覆盖。
+
+一行部署命令（root SSH 终端，**不要使用 curl | bash**，交互式输入需要正常终端 stdin）：
+
+~~~bash
+curl -fsSL -o /root/install-xhttp.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/xray-xhttp/install.sh && bash /root/install-xhttp.sh
+~~~
+
+安装器依次询问：
+
+1. 节点连接地址：现有灰云域名或 VPS IP。
+2. REALITY 目标域名：必须支持 TLS 1.3 与 HTTP/2；脚本使用 openssl 验证。此域名是 REALITY 握手目标，不必是你的自有域名。
+3. 确认安装官方 Xray-core v26.10.31。
+
+使用 XTLS/Xray-install 官方安装器和 XTLS/Xray-examples 官方示例格式。自动生成 WIN-PC、MACBOOK、IPHONE、FAMILY 四套独立 UUID、随机 XHTTP path、REALITY 公私钥和 Short ID；通过 Xray 官方 run -test 检查配置后再启动。不会修改现有 Hysteria 配置、密码、UDP 端口或 Cloudflare DNS。
+
+安装成功后，复用原 Telegram Bot；新增命令：
+
+- /xstatus：查看 Xray 版本、运行状态。
+- /xall：获取四个 XHTTP REALITY 设备链接及二维码。
+- /xget IPHONE：获取指定设备的链接和二维码。
+
+原命令 /add_defaults、/get IPHONE 仍然管理 HY2，互不混淆。Xray 节点链接、二维码保存在 VPS /var/lib/hy2-telegram/xray/clients/（只有 root 和机器人组可读），不要提交 GitHub。安装过程会备份并重启 Telegram 机器人，但不会重启 HY2。
+
+**兼容性提示：** VLESS XHTTP REALITY 并非所有 iOS 客户端都能正确导入。Loon 曾存在将 XHTTP 链接错误解析为普通 TCP 的报告，二维码成功发送不代表客户端已经支持该传输。应在导入后检查实际传输类型并测试连接。Cloudflare 仍使用 DNS only（灰云），普通橙云不直接转发 REALITY TCP。
+

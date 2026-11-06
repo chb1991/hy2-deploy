@@ -31,6 +31,10 @@
 
 Bot Token 通过 Telegram 的 @BotFather 使用 /newbot 创建；管理员数字 User ID 可通过 @userinfobot 的 /start 获取。Token 不要发给他人或提交 GitHub。 同一个 Bot Token 不要同时运行在两台 VPS 上，否则 Telegram 长轮询会冲突。
 
+## XHTTP REALITY 扩展命令
+
+如果同时安装 xray-xhttp/install.sh，原机器人将增加 /xstatus、/xall、/xget IPHONE，分别查询 Xray TCP 服务、发送全部四套 XHTTP 节点、发送指定设备的节点链接与二维码。原 /get 和 /add_defaults 仍只管理 HY2。
+
 ## 升级已安装的机器人
 
 前提：原 Hysteria 服务和 Telegram 机器人均正常运行；原部署目录中存在 /root/hy2-output/client.yaml。
