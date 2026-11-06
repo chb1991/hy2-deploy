@@ -144,8 +144,12 @@ def collect(config, now=None, reader=read_interface):
                 current_dates.add(entry_date)
             if entry_date == now.date():
                 add(today, counts)
-        if not current_dates and created <= now.date():
-            issues.append(f"{iface} 缺少本周期每日记录")
+        # Missing daily rows can mean the daemon was disabled during the
+        # billing period. Fail closed rather than under-reporting allowance.
+        expected_days = (now.date() - start).days + 1
+        if len(current_dates) < expected_days:
+            missing = expected_days - len(current_dates)
+            issues.append(f"{iface} 本周期缺少 {missing} 天的日统计记录")
     is_complete = not issues
     used = period["tx"] + period["rx"]
     limit = allowance * GIB
