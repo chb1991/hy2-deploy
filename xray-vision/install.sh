@@ -50,6 +50,7 @@ trap 'exit 143' TERM
 . /etc/os-release
 [[ "$ID" == debian && "$VERSION_ID" == 13 && "$(uname -m)" == x86_64 ]] || fail "仅支持 Debian 13 x86_64。"
 [[ -x "$XRAY" && -f "$XRAY_CONF" ]] || fail "未找到现有 Xray + XHTTP 安装。"
+"$XRAY" run -test -config "$XRAY_CONF" >/dev/null 2>&1 || fail "原有 XHTTP 配置不通过官方校验；拒绝启动新服务。"
 [[ -f /etc/hysteria/config.yaml && -f /etc/hy2-telegram/bot.env && -f "$BOT" ]] || fail "现有 HY2/Telegram 不完整。"
 systemctl is-active --quiet xray.service || fail "原 XHTTP 服务未运行。"
 systemctl is-active --quiet hysteria-server.service || fail "原 HY2 服务未运行。"
@@ -222,9 +223,13 @@ systemctl is-active --quiet xray.service || fail "原 XHTTP 服务异常，请�
 systemctl is-active --quiet hysteria-server.service || fail "原 HY2 服务异常，请检查。"
 
 log "备份并更新 Telegram 机器人……"
+BACKUP_DIR="/root/vision-backups/$(date +%Y%m%d-%H%M%S)-$"
+install -d -o root -g root -m 700 "$BACKUP_DIR"
 cp -a "$BOT" "$TMP/bot.backup"
+cp -a "$BOT" "$BACKUP_DIR/bot.py"
 if [[ -f "$TMP/dual_bot.py" ]]; then
   cp -a "$DUAL" "$TMP/dual.backup"
+  cp -a "$DUAL" "$BACKUP_DIR/dual_bot.py"
   DUAL_UPDATED=1
   install -o root -g root -m 755 "$TMP/dual_bot.py" "$DUAL"
 fi
@@ -244,6 +249,7 @@ printf 'XHTTP TCP 443：%s\n' "$(systemctl is-active xray.service)"
 printf 'Vision TCP %s：%s\n' "$PORT" "$(systemctl is-active xray-vision.service)"
 printf 'Telegram：%s\n' "$(systemctl is-active hy2-telegram.service)"
 printf '机器人命令：/vstatus、/vall、/vget IPHONE\n'
+printf '机器人备份：%s\n' "$BACKUP_DIR"
 printf '私有节点目录：%s/clients/\n' "$VISION_ROOT"
 printf '请在服务商防火墙放行 TCP %s；Cloudflare 保持灰云。\n' "$PORT"
 printf '====================================\n'
