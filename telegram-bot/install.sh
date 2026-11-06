@@ -111,12 +111,13 @@ install -d -o hy2bot -g hy2bot -m 750 "$STATE_DIR"
 install -d -o root -g hy2bot -m 750 "$ETC_DIR"
 
 log "从 GitHub 下载机器人程序和核心升级工具……"
+curl -fsSL --retry 3 "$REPO_RAW/v2_ui.py" -o "$BOT_DIR/v2_ui.py"
 curl -fsSL --retry 3 "$REPO_RAW/bot.py" -o "$BOT_DIR/bot.py"
 curl -fsSL --retry 3 "$ROOT_RAW/core-update.sh" -o /tmp/hy2-core-update.sh
-python3 -m py_compile "$BOT_DIR/bot.py"
+python3 -m py_compile "$BOT_DIR/bot.py" "$BOT_DIR/v2_ui.py"
 bash -n /tmp/hy2-core-update.sh
-chown root:root "$BOT_DIR/bot.py"
-chmod 755 "$BOT_DIR/bot.py"
+chown root:root "$BOT_DIR/bot.py" "$BOT_DIR/v2_ui.py"
+chmod 755 "$BOT_DIR/bot.py" "$BOT_DIR/v2_ui.py"
 install -o root -g root -m 0750 /tmp/hy2-core-update.sh /usr/local/sbin/core-update
 rm -f /tmp/hy2-core-update.sh
 if [[ -e /usr/local/bin/update || -L /usr/local/bin/update ]]; then
