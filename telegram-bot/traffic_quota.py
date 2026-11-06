@@ -328,16 +328,21 @@ def friendly(value):
 
 def alert_text(snapshot, threshold):
     used = snapshot["used_bytes"]
+    calibrated = bool(snapshot.get("calibrated"))
+    prefix = "校准后新增" if calibrated else "本周期"
+    base = (f"人工校准起点  {friendly(snapshot['baseline_bytes'])}\n"
+            if calibrated else "")
     return (
         "⚠ CHBVPS · 整机流量预警\n\n"
         f"计费周期  {snapshot['cycle_start']} 至 {snapshot['next_reset']}（不含）\n"
         "额度  500 GB（按 1024³ 字节）\n"
+        f"{base}"
         f"已使用  {friendly(used)} ({snapshot['percent']:.1f}%)\n"
         f"剩余估算  {friendly(snapshot['remaining_bytes'])}\n"
         f"提醒等级  {threshold}%\n"
-        f"上传  {friendly(snapshot['cycle']['tx'])}\n"
-        f"下载  {friendly(snapshot['cycle']['rx'])}\n\n"
-        "ⓘ vnStat 本机网卡流量不等于搬瓦工后台的精确计费量；不会自动停机。"
+        f"{prefix}上传  {friendly(snapshot['cycle']['tx'])}\n"
+        f"{prefix}下载  {friendly(snapshot['cycle']['rx'])}\n\n"
+        "ⓘ 本机人工校准 + vnStat 增量均为近似值，不等于搬瓦工后台实时计费；不会自动停机。"
     )
 
 
