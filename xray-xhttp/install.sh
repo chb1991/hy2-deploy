@@ -58,9 +58,14 @@ parts=sni.lower().split('.')
 if any(x in ('apple','icloud','microsoft') for x in parts) or parts[-1] in ('cn','ru','ir'):
     sys.exit('该 REALITY 目标可能触发 Xray 的封锁风险警告，请更换目标网站。')
 PY
-printf '验证目标 TLS1.3 + H2 支持情况……\n'
-result=$(timeout 15 openssl s_client -connect "$SNI:443" -servername "$SNI" -tls1_3 -alpn h2 </dev/null 2>&1 || true)
-[[ "$result" == *TLSv1.3* && "$result" == *'ALPN protocol: h2'* ]] || fail '目标未通过 TLS1.3/H2 验证，请换一个 SNI。'
+printf '验证目标 TLS1.3、H2、证书链和域名匹配情况……\n'
+if ! result=$(timeout 15 openssl s_client -connect "$SNI:443" -servername "$SNI" \
+    -tls1_3 -alpn h2 -verify_hostname "$SNI" -verify_return_error </dev/null 2>&1); then
+  printf '%s\n' "$result" | tail -10 >&2
+  fail '目标 TLS 握手或证书验证失败，请换一个 REALITY 目标。'
+fi
+[[ "$result" == *TLSv1.3* && "$result" == *'ALPN protocol: h2'* && "$result" == *'Verify return code: 0 (ok)'* ]] \
+  || fail '目标未通过 TLS1.3 / HTTP2 / 证书验证，请更换 REALITY 目标。'
 read -r -p '确认安装官方 Xray v26.10.31 并接入已有 Telegram？[y/N]： ' CONFIRM
 [[ "$CONFIRM" == y || "$CONFIRM" == Y ]] || fail '已取消。'
 
