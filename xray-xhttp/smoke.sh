@@ -6,6 +6,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 VERSION=v26.10.31
+# Regression: /etc/os-release contains VERSION="13 (trixie)", which must
+# never overwrite the requested Xray release in the installer.
+INSTALLER_VERSION="$(sed -nE 's/^XRAY_VERSION=(v[0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "$ROOT/xray-xhttp/install.sh")"
+[[ "$INSTALLER_VERSION" == "$VERSION" ]] || {
+  printf 'FAIL: installer Xray version overwritten or does not match smoke target\n' >&2
+  exit 1
+}
+grep -Fq 'install --version "$XRAY_VERSION"' "$ROOT/xray-xhttp/install.sh"
+(
+  XRAY_VERSION="$INSTALLER_VERSION"
+  . /etc/os-release
+  [[ "$XRAY_VERSION" == "$VERSION" ]] || {
+    printf 'FAIL: /etc/os-release overwrote XRAY_VERSION\n' >&2
+    exit 1
+  }
+)
 ZIP="$TMP/Xray-linux-64.zip"
 curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 \
   "https://github.com/XTLS/Xray-core/releases/download/$VERSION/Xray-linux-64.zip" \

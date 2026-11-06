@@ -2,7 +2,7 @@
 # Official Xray-core VLESS + XHTTP + REALITY alongside HY2 UDP 443.
 set -Eeuo pipefail
 umask 077
-VERSION=v26.10.31
+XRAY_VERSION=v26.10.31
 XRAY=/usr/local/bin/xray
 CONF=/usr/local/etc/xray/config.json
 BOT=/opt/hy2-telegram/bot.py
@@ -15,6 +15,8 @@ trap 'rm -rf "$TMP"' EXIT
 fail() { printf '[错误] %s\n' "$*" >&2; exit 1; }
 [[ $(id -u) -eq 0 ]] || fail '请使用 root。'
 . /etc/os-release
+# /etc/os-release defines VERSION="13 (trixie)"; never use that name for Xray.
+[[ "$XRAY_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Xray 核心版本字段无效。'
 [[ "$ID" == debian && "$VERSION_ID" == 13 && $(uname -m) == x86_64 ]] || fail '仅支持 Debian 13 x86_64。'
 [[ -f /etc/hysteria/config.yaml && -f /etc/hy2-telegram/bot.env && -f "$BOT" ]] || fail '需要现有 HY2 + Telegram 机器人。'
 systemctl is-active --quiet hysteria-server.service || fail 'HY2 未运行。'
@@ -87,7 +89,7 @@ curl -fsSL --retry 3 https://raw.githubusercontent.com/XTLS/Xray-install/main/in
 bash -n "$TMP/install-release.sh"
 # Keep this marker on errors so an interrupted installation can be retried.
 install -o root -g root -m 600 /dev/null "$PENDING"
-bash "$TMP/install-release.sh" install --version "$VERSION" --without-geodata --without-logfiles
+bash "$TMP/install-release.sh" install --version "$XRAY_VERSION" --without-geodata --without-logfiles
 [[ -x "$XRAY" ]] || fail '官方 Xray 安装失败。'
 getent group xray >/dev/null || fail '官方 xray 用户组缺失。'
 keys=$($XRAY x25519)
