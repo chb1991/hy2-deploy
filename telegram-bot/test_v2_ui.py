@@ -267,10 +267,14 @@ class V2Tests(unittest.TestCase):
         root = pathlib.Path(__file__).resolve().parents[1]
         script = (root / "telegram-bot/upgrade-v2.sh").read_text(encoding="utf-8")
         self.assertIn('systemctl restart "$SERVICE"', script)
-        self.assertNotIn("systemctl restart hysteria-server.service", script)
-        self.assertNotIn("systemctl restart xray.service", script)
-        self.assertNotIn("systemctl restart xray-vision.service", script)
-        self.assertNotIn("systemctl restart tuic-singbox.service", script)
+        # The installer intentionally contains sudoers entries permitting
+        # later user-confirmed restarts; those are not executable restarts.
+        executable = [
+            line.strip() for line in script.splitlines()
+            if line.strip().startswith("systemctl restart ")
+        ]
+        self.assertEqual(executable, ['systemctl restart "$SERVICE" || true',
+                                      'systemctl restart "$SERVICE" || fail "Telegram 重启失败。"'])
         self.assertIn("visudo -cf", script)
         self.assertIn("chbvps-bot-backups", script)
 
