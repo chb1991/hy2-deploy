@@ -290,7 +290,8 @@ def status_text():
         f"🔹 TCP：{socket_count(['-tan'])}\n"
         f"🔸 UDP：{socket_count(['-uan'])}\n"
         f"🚦 流量：{traffic}\n\n"
-        f"ℹ️ HY2 状态：{'🟢' if state=='active' else '🔴'} {state}\n"        + (f"🌐 Xray TCP：{xray_status_text().splitlines()[3]}" if xray_names() else "")
+        f"ℹ️ HY2 状态：{'🟢' if state=='active' else '🔴'} {state}"
+        + (f"\n🌐 Xray TCP：{xray_service_state()}" if xray_names() else "")
     )
 
 
@@ -369,18 +370,27 @@ def xray_client(name):
     return {"name":name,"uri":uri,"qr_path":qr}
 
 
-def xray_status_text():
+def xray_service_state():
     try:
-        service=subprocess.run(
+        result=subprocess.run(
             ["systemctl","is-active","xray.service"],
             capture_output=True,text=True,timeout=3,check=False
-        ).stdout.strip() or "unknown"
+        )
+        return result.stdout.strip() or "unknown"
+    except (OSError,subprocess.TimeoutExpired):
+        return "unknown"
+
+
+def xray_status_text():
+    service=xray_service_state()
+    try:
         result=subprocess.run(
             [XRAY_BIN,"version"],capture_output=True,text=True,timeout=5,check=False
         )
-        version=(result.stdout or result.stderr).splitlines()[0].strip()[:100] if result.returncode==0 else "未知"
-    except (OSError,IndexError,subprocess.TimeoutExpired):
-        service,version="unknown","未知"
+        lines=(result.stdout or result.stderr).splitlines()
+        version=lines[0].strip()[:100] if result.returncode==0 and lines else "未知"
+    except (OSError,subprocess.TimeoutExpired):
+        version="未知"
     return "🌐 Xray TCP 服务\n\n📦 版本："+version+"\nℹ️ 状态："+service+"\n📱 设备："+(", ".join(xray_names()) or "未部署")
 
 

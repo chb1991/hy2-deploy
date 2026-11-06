@@ -88,7 +88,8 @@ def status():
         f"主机：{hy2.socket.gethostname()}\n"
         f"运行时间：{hy2.uptime_text()}\n"
         f"RAM：{hy2.mb(used):.0f} / {hy2.mb(total):.0f} MB\n"
-        "注意：LISTEN 是本机监听，不代表国内连接成功；TUIC 暂无在线统计接口。"
+        + (f"Xray TCP 443：{hy2.xray_service_state()}\n" if hy2.xray_names() else "")
+        + "注意：LISTEN 是本机监听，不代表国内连接成功；TUIC 暂无在线统计接口。"
     )
     return "🖥 HY2 + TUIC 双协议状态\n\n<pre>" + html.escape(table) + "</pre>\n" + html.escape(details)
 
