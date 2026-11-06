@@ -94,7 +94,9 @@ class VisionTelegramTests(unittest.TestCase):
                 self.assertEqual(msg.call_count, 1)
                 self.assertIn("active", msg.call_args.args[1])
         self.assertIn("/vget IPHONE", bot.help_text())
-        self.assertIn("/vget", ["/" + command["command"] for command in bot.COMMANDS])
+        # V2 hides legacy commands from the visible menu while retaining handling.
+        self.assertNotIn("/vget", ["/" + command["command"] for command in bot.COMMANDS])
+        self.assertIn("/get", ["/" + command["command"] for command in bot.COMMANDS])
 
 
 if __name__ == "__main__":
