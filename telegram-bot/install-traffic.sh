@@ -119,8 +119,8 @@ import re,sys
 p=Path(sys.argv[1])
 old=p.read_text(encoding="utf-8")
 lines=[l for l in old.splitlines()
-       if not re.match(r"^\s*[;#]?\s*MonthRotate\s+\d+(?:\s*(?:[#;].*)?)?$",l)]
-lines.append("MonthRotate 16")
+       if not re.match(r"^\s*[;#]?\s*(?:MonthRotate|UseUTC)\s+\d+(?:\s*(?:[#;].*)?)?$",l)]
+lines.extend(["MonthRotate 16","UseUTC 0"])
 p.write_text("\n".join(lines)+"\n",encoding="utf-8")
 PY
 python3 - "$CONFIG" "$IFACES" <<'PY'
@@ -144,8 +144,6 @@ install -d -o root -g hy2bot -m 0750 "$STATE"
 
 systemctl enable --now vnstat.service >/dev/null
 systemctl restart vnstat.service
-IFS=',' read -ra INTERFACES <<< "$IFACES"
-for interface in "$IFACES"; do :; done
 for interface in $(printf '%s\n' "$IFACES" | tr ',' ' '); do
   if ! vnstat --dbiflist 1 2>/dev/null | grep -Fxq "$interface"; then
     vnstat --add -i "$interface" >/dev/null || fail "不能将网卡 $interface 加入 vnStat。"
@@ -166,7 +164,7 @@ Type=oneshot
 User=root
 Group=root
 EnvironmentFile=/etc/hy2-telegram/bot.env
-ExecStart=/usr/bin/python3 /opt/hy2-telegram/traffic_quota.py --notify
+ExecStart=/usr/bin/env -u TZ /usr/bin/python3 /opt/hy2-telegram/traffic_quota.py --notify
 UMask=0077
 PrivateTmp=true
 ProtectSystem=strict
@@ -197,7 +195,7 @@ chmod 644 "$UNIT" "$TIMER"
 systemctl daemon-reload
 
 # Produce a snapshot before starting scheduled notifications.
-python3 "$BOT_DIR/traffic_quota.py"
+/usr/bin/env -u TZ python3 "$BOT_DIR/traffic_quota.py"
 [[ -r "$STATE/quota.json" ]] || fail "未能生成流量快照"
 sudo -u hy2bot test -r "$STATE/quota.json" || fail "Telegram 账户无法读取流量快照"
 systemctl enable --now chbvps-traffic.timer >/dev/null
