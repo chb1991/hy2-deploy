@@ -187,7 +187,7 @@ def quota_status_lines():
             f"配额  <b>500 GB</b>（按 1024³ 字节）",
             f"网卡  <code>{ifaces}</code>",
             "",
-            "<b>今日全网卡流量</b>",
+            "<b>今日 vnStat 已记录流量</b>",
             f"↑ 上传  {gb(q['today']['tx'])}",
             f"↓ 下载  {gb(q['today']['rx'])}",
             "",
