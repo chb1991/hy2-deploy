@@ -56,9 +56,12 @@ for name in ("WIN-PC","MACBOOK","IPHONE","FAMILY"):
     assert query["type"]==["tcp"] and query["security"]==["reality"]
     assert query["flow"]==["xtls-rprx-vision"]
     assert query["sni"]==["www.example.org"]
+    assert query["fp"]==["chrome147"]
+    assert query["tls-profile"]==["chrome147"]
     assert query["pbk"] and query["sid"]
     assert f"VISION-{name} = VLESS,proxy.example.com,8443" in loon
     assert "transport=tcp,flow=xtls-rprx-vision" in loon
     assert "over-tls=true" in loon
+    assert "tls-profile=chrome147" in loon
 print("PASS: Xray official Vision config, 4 UUIDs, VLESS URI and Loon lines")
 PY
