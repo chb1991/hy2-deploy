@@ -193,7 +193,7 @@ class V2Tests(unittest.TestCase):
         self.assertIn("剩余额度（估算）  280.00 GB", body)
         self.assertIn("↑ 上传  200.00 GB", body)
         self.assertIn("↓ 下载  20.00 GB", body)
-        self.assertIn("本机网卡双向流量", body) if "本机网卡双向流量" in body else self.assertIn("网卡双向流量", body)
+        self.assertIn("网卡双向流量", body)
 
     def test_status_incomplete_never_invents_remaining_quota(self):
         snapshot = {
