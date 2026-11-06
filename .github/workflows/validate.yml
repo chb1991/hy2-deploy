@@ -22,3 +22,5 @@ jobs:
         run: bash xray-xhttp/smoke.sh
       - name: Smoke test Vision REALITY config and Loon client lines
         run: bash xray-vision/smoke.sh
+      - name: Test Vision Telegram access control and dual-bot routing
+        run: python -m unittest discover -s telegram-bot -p test_vision.py -v
