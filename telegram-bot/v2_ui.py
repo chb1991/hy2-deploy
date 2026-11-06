@@ -199,7 +199,7 @@ def quota_status_lines():
                 f"↑ 校准后新增上传  {gb(q['cycle']['tx'])}",
                 f"↓ 校准后新增下载  {gb(q['cycle']['rx'])}",
                 f"Σ 本期合计已用  <b>{gb(q['used_bytes'])}</b>",
-                "ⓘ 校准前 204.95G 的上下行明细未知，不虚构拆分。",
+                f"ⓘ 校准前 {gb(q['baseline_bytes'])} 的上下行明细未知，不虚构拆分。",
             ])
         else:
             lines.extend([
