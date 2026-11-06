@@ -8,6 +8,9 @@ RAW="https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot"
 BOT_DIR=/opt/hy2-telegram
 CONFIG=/etc/chbvps-traffic.json
 STATE=/var/lib/hy2-telegram/traffic
+CALIBRATION_GIB="${CHBVPS_CALIBRATION_GIB:-204.95}"
+CALIBRATION_DATE=2026-11-06
+CALIBRATION_CYCLE=2026-10-16
 VNSTAT_CONF=/etc/vnstat.conf
 UNIT=/etc/systemd/system/chbvps-traffic.service
 TIMER=/etc/systemd/system/chbvps-traffic.timer
@@ -26,7 +29,8 @@ cleanup() {
     log "部署失败，尽力恢复旧版 Telegram UI 与 vnStat 配置。"
     systemctl disable --now chbvps-traffic.timer >/dev/null 2>&1 || true
     for path in "$VNSTAT_CONF" "$CONFIG" "$UNIT" "$TIMER" \
-                "$BOT_DIR/traffic_quota.py" "$BOT_DIR/v2_ui.py"; do
+                "$BOT_DIR/traffic_quota.py" "$BOT_DIR/v2_ui.py" \
+                "$STATE/calibration.json" "$STATE/quota.json" "$STATE/alerts.json"; do
       local name
       name="$(basename "$path")"
       if [[ -f "$BACKUP/$name" ]]; then
@@ -60,12 +64,15 @@ curl -fsSL --retry 3 "$RAW/v2_ui.py" -o "$TMP/v2_ui.py"
 python3 -m py_compile "$TMP/traffic_quota.py" "$TMP/v2_ui.py"
 printf '\n部署范围：整机公网流量 500GB、每月16日重置、80/90/95/100%% 分级 Telegram 预警。\n'
 printf '不会申请搬瓦工 API，不修改代理端口、密钥或证书。\n'
+printf '本周期人工校准：%s GB（2026-11-06 提供）；将在执行时冻结 vnStat 网卡计数器基线。\n' "$CALIBRATION_GIB"
+printf '注意：204.95G 是用户提供时的数值；若 VPS 在报告后产生流量，安装时间越晚估计误差越大。\n'
 read -r -p '确认安装？[y/N]： ' ans
 [[ "$ans" == y || "$ans" == Y ]] || { echo "已取消。"; exit 0; }
 
 install -d -o root -g root -m 700 "$BACKUP"
 for path in "$VNSTAT_CONF" "$CONFIG" "$UNIT" "$TIMER" \
-            "$BOT_DIR/traffic_quota.py" "$BOT_DIR/v2_ui.py"; do
+            "$BOT_DIR/traffic_quota.py" "$BOT_DIR/v2_ui.py" \
+            "$STATE/calibration.json" "$STATE/quota.json" "$STATE/alerts.json"; do
   if [[ -f "$path" ]]; then cp -a "$path" "$BACKUP/$(basename "$path")"; fi
 done
 
@@ -194,6 +201,13 @@ TIMER
 chmod 644 "$UNIT" "$TIMER"
 systemctl daemon-reload
 
+# Capture the single immutable user-provided baseline at the moment of installation.
+# Re-running with an existing matching calibration does not reset the counters.
+/usr/bin/env -u TZ python3 "$BOT_DIR/traffic_quota.py" \
+  --calibrate "$CALIBRATION_GIB" \
+  --target-cycle "$CALIBRATION_CYCLE" \
+  --calibration-date "$CALIBRATION_DATE"
+
 # Produce a snapshot before starting scheduled notifications.
 /usr/bin/env -u TZ python3 "$BOT_DIR/traffic_quota.py"
 [[ -r "$STATE/quota.json" ]] || fail "未能生成流量快照"
@@ -210,7 +224,8 @@ echo "=========== CHBVPS 500GB 流量监控已部署 ==========="
 printf '网卡：%s\n' "$IFACES"
 echo "周期：每月16日开始，按 VPS 本地时间；包含所有协议及系统流量"
 echo "提醒：80%、90%、95%、100%，每周期每阈值最多一次"
-echo "统计初期如果不是完整周期，会明确标记并暂不发送预警"
+printf '人工校准起点：%s GB；校准后的新增网卡流量自动累计。\n' "$CALIBRATION_GIB"
+echo "从下一次16日重置起，不再携带上一周期的人工校准值。"
 echo "未重启 HY2/TUIC/Vision/XHTTP；只重启了 vnStat 和 Telegram"
 printf '配置备份：%s\n' "$BACKUP"
 echo "Telegram：/status 查看整机统计，/start 查看流量概要"
