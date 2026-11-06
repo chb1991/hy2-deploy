@@ -9,3 +9,5 @@
 *.crt
 *.pem
 output/
+__pycache__/
+*.pyc
