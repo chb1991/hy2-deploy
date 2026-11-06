@@ -43,6 +43,7 @@ cleanup() {
   exit "$code"
 }
 trap cleanup EXIT
+trap 'rc=$?; printf "\n[Vision] 脚本第 %s 行发生错误（状态码 %s）\n" "$LINENO" "$rc" >&2' ERR
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -63,7 +64,7 @@ for command in python3 openssl curl qrencode ss runuser timeout; do
   command -v "$command" >/dev/null 2>&1 || fail "缺少 $command 命令。"
 done
 log "复用当前官方 Xray 核心："
-"$XRAY" version | head -n 1
+"$XRAY" version | sed -n '1p'
 
 DEFAULT_HOST="$(python3 - /var/lib/hy2-telegram/xray/clients/IPHONE/node.txt <<'PY'
 import pathlib,sys,urllib.parse
@@ -141,8 +142,8 @@ read -r -p "确认安装？[y/N]： " ANSWER
 
 log "生成独立 REALITY 密钥及四个 UUID……"
 keys="$("$XRAY" x25519)"
-VISION_PRIVATE="$(printf '%s\n' "$keys" | sed -nE 's/^PrivateKey:[[:space:]]*//p' | head -n 1)"
-VISION_PUBLIC="$(printf '%s\n' "$keys" | sed -nE 's/^(Password( \(PublicKey\))?|PublicKey):[[:space:]]*//p' | head -n 1)"
+VISION_PRIVATE="$(printf '%s\n' "$keys" | sed -nE 's/^PrivateKey:[[:space:]]*//p' | sed -n '1p')"
+VISION_PUBLIC="$(printf '%s\n' "$keys" | sed -nE 's/^(Password( \(PublicKey\))?|PublicKey):[[:space:]]*//p' | sed -n '1p')"
 [[ "$VISION_PRIVATE" =~ ^[A-Za-z0-9_-]{43,44}$ && "$VISION_PUBLIC" =~ ^[A-Za-z0-9_-]{43,44}$ ]] || fail "REALITY 公私钥格式异常。"
 VISION_SID="$(openssl rand -hex 8)"
 VISION_UUIDS=''
