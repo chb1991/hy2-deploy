@@ -193,7 +193,33 @@ class V2Tests(unittest.TestCase):
         self.assertIn("剩余额度（估算）  280.00 GB", body)
         self.assertIn("↑ 上传  200.00 GB", body)
         self.assertIn("↓ 下载  20.00 GB", body)
-        self.assertIn("网卡双向流量", body)
+        self.assertIn("整机网卡流量", body)
+
+    def test_204_95_manual_calibration_hides_incomplete_banner_and_keeps_balance(self):
+        snapshot = {
+            "schema": 1, "complete": True, "calibrated": True,
+            "allowance_gib": 500, "cycle_start": "2026-10-16",
+            "next_reset": "2026-11-16", "interfaces": ["eth0"],
+            "today": {"tx": 0, "rx": 0},
+            "cycle": {"tx": 0, "rx": 0},
+            "baseline_bytes": int(204.95 * ui.GIB),
+            "lifetime": {"tx": 0, "rx": 0},
+            "used_bytes": int(204.95 * ui.GIB),
+            "remaining_bytes": int(295.05 * ui.GIB),
+            "percent": 40.99,
+            "sampled_local": "2026-11-06T14:17+08:00",
+            "calibrated_at": "2026-11-06T14:17+08:00",
+        }
+        with mock.patch.object(ui, "read_quota_snapshot", return_value=snapshot):
+            ui.handle_message(message("/start"), self.b, self.tuic)
+            self.assertIn("204.95 GB / 500 GB", self.b.messages[-1]["text"])
+            self.assertIn("人工校准", self.b.messages[-1]["text"])
+            ui.handle_message(message("/status"), self.b, self.tuic)
+        text = self.b.messages[-1]["text"]
+        self.assertIn("◈ 人工校准起点  204.95 GB", text)
+        self.assertIn("剩余额度（估算）  295.05 GB", text)
+        self.assertIn("Σ 本期合计已用  <b>204.95 GB</b>", text)
+        self.assertNotIn("统计不完整", text)
 
     def test_status_incomplete_never_invents_remaining_quota(self):
         snapshot = {
@@ -209,7 +235,7 @@ class V2Tests(unittest.TestCase):
         body = self.b.messages[-1]["text"]
         self.assertIn("本周期统计不完整", body)
         self.assertNotIn("剩余额度（估算）", body)
-        self.assertIn("不显示不可靠的剩余额度", body)
+        self.assertIn("暂停剩余额度及比例估算", body)
 
     def test_get_all_links_and_qr_on_demand(self):
         ui.handle_message(message("/get IPHONE"), self.b, self.tuic)
