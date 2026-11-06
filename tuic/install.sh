@@ -188,11 +188,13 @@ fi
 
 log "Installing TUIC manager, core updater and Telegram adapter"
 curl -fsSL --retry 3 "$RAW/tuic/users.py" -o "$TMP/users.py"
+curl -fsSL --retry 3 "$RAW/telegram-bot/v2_ui.py" -o "$TMP/v2_ui.py"
 curl -fsSL --retry 3 "$RAW/telegram-bot/dual_bot.py" -o "$TMP/dual_bot.py"
 curl -fsSL --retry 3 "$RAW/core-update.sh" -o "$TMP/core-update.sh"
-python3 -m py_compile "$TMP/users.py" "$TMP/dual_bot.py"
+python3 -m py_compile "$TMP/users.py" "$TMP/dual_bot.py" "$TMP/v2_ui.py"
 bash -n "$TMP/core-update.sh"
 install -o root -g root -m 0750 "$TMP/users.py" /usr/local/sbin/tuic-users
+install -o root -g root -m 0755 "$TMP/v2_ui.py" /opt/hy2-telegram/v2_ui.py
 install -o root -g root -m 0755 "$TMP/dual_bot.py" /opt/hy2-telegram/dual_bot.py
 install -o root -g root -m 0750 "$TMP/core-update.sh" /usr/local/sbin/core-update
 if [[ -e /usr/local/bin/update || -L /usr/local/bin/update ]]; then
