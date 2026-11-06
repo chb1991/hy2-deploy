@@ -166,7 +166,8 @@ def quota_home_line():
     try:
         if not q["complete"]:
             return "◈ 流量  已启用（本周期统计不完整）"
-        return f"◈ 流量  {gb(q['used_bytes'])} / 500 GB（{q['percent']:.1f}%）"
+        tag = " · 人工校准" if q.get("calibrated") else ""
+        return f"◈ 流量  {gb(q['used_bytes'])} / 500 GB（{q['percent']:.1f}%{tag}）"
     except (KeyError, ValueError, TypeError):
         return "◈ 流量  暂不可用"
 
@@ -191,10 +192,21 @@ def quota_status_lines():
             f"↓ 下载  {gb(q['today']['rx'])}",
             "",
             "<b>本周期整机流量</b>",
-            f"↑ 上传  {gb(q['cycle']['tx'])}",
-            f"↓ 下载  {gb(q['cycle']['rx'])}",
-            f"Σ 已记录  {gb(q['used_bytes'])}",
         ]
+        if q.get("calibrated"):
+            lines.extend([
+                f"◈ 人工校准起点  {gb(q['baseline_bytes'])}",
+                f"↑ 校准后新增上传  {gb(q['cycle']['tx'])}",
+                f"↓ 校准后新增下载  {gb(q['cycle']['rx'])}",
+                f"Σ 本期合计已用  <b>{gb(q['used_bytes'])}</b>",
+                "ⓘ 校准前 204.95G 的上下行明细未知，不虚构拆分。",
+            ])
+        else:
+            lines.extend([
+                f"↑ 上传  {gb(q['cycle']['tx'])}",
+                f"↓ 下载  {gb(q['cycle']['rx'])}",
+                f"Σ 本期合计已用  <b>{gb(q['used_bytes'])}</b>",
+            ])
         if q["complete"]:
             pct = float(q["percent"])
             fill = max(0, min(10, int(pct / 10 + 0.5)))
@@ -205,8 +217,9 @@ def quota_status_lines():
             ])
         else:
             lines.extend([
-                "⚪ <b>本周期统计不完整</b>",
-                "不显示不可靠的剩余额度/比例，暂不发送配额预警。",
+                ("⚪ <b>校准后监控异常</b>" if q.get("calibrated")
+                 else "⚪ <b>本周期统计不完整</b>"),
+                "暂停剩余额度及比例估算，等待监控恢复后再继续计算。",
             ])
         lines.extend([
             "",
@@ -214,12 +227,14 @@ def quota_status_lines():
             f"↑ 上传  {gb(q['lifetime']['tx'])}",
             f"↓ 下载  {gb(q['lifetime']['rx'])}",
             "",
-            "ⓘ 网卡双向流量包含系统通信，不等于搬瓦工后台计费。",
+            "ⓘ 整机网卡流量包含系统通信；人工校准不等于搬瓦工后台实时计费。",
             "ⓘ 每月16日按服务器本地日期开始新周期；实际服务商重置时刻可能不同。",
             f"更新时间  <code>{esc(q['sampled_local'])}</code>",
         ])
+        if q.get("calibrated"):
+            lines.append("ⓘ 校准时点  " + esc(q.get("calibrated_at") or "当前周期"))
         if not q["complete"]:
-            lines.append("ⓘ " + esc(q.get("note", "首次采集尚未覆盖完整周期")))
+            lines.append("ⓘ " + esc(q.get("note", "监控数据暂不可用")))
         return lines
     except (KeyError, ValueError, TypeError, OverflowError):
         return ["⚪ 当前统计数据不完整，请检查监控服务。"]
