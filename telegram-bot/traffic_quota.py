@@ -144,8 +144,6 @@ def create_calibration(config, amount_gib, expected_cycle, expected_date=None,
     start, _ = local_cycle(now.date(), int(config.get("reset_day", 16)))
     if expected_cycle != start.isoformat():
         raise MonitoringError("当前计费周期与校准数据日期不匹配；禁止把上期用量套到新周期")
-    if expected_date and now.date().isoformat() != expected_date:
-        raise MonitoringError("人工流量数据对应 2026-11-06，请重新提供当前日期的已用量再校准")
     amount_bytes = calibration_amount(amount_gib)
     ifaces = config["interfaces"]
     if not isinstance(ifaces, list) or not ifaces or len(set(ifaces)) != len(ifaces):
@@ -157,6 +155,11 @@ def create_calibration(config, amount_gib, expected_cycle, expected_date=None,
             # Reinstalling must NOT zero the already accumulated post-anchor usage.
             return previous
         raise MonitoringError("已有人工校准记录，拒绝覆盖，以免丢失校准后的流量")
+    if expected_date and now.date().isoformat() != expected_date:
+        raise MonitoringError(
+            f"人工流量数据适用日期为 {expected_date}，但服务器当前是 "
+            f"{now.date().isoformat()}；请提供新日期的已用量后校准"
+        )
     counters = {}
     for iface in ifaces:
         entry = reader(iface)
