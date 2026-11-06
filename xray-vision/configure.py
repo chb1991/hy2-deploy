@@ -90,7 +90,9 @@ def render(host, sni, port, private, public, sid, users, output):
             "security": "reality",
             "flow": "xtls-rprx-vision",
             "sni": sni,
-            "fp": "chrome",
+            "fp": "chrome147",
+            # Loon-specific hint; generic VLESS URI clients can ignore this key.
+            "tls-profile": "chrome147",
             "pbk": public,
             "sid": sid,
             "spx": "/",
@@ -103,7 +105,7 @@ def render(host, sni, port, private, public, sid, users, output):
             f"VISION-{name} = VLESS,{host},{port},\"{user}\","
             "transport=tcp,flow=xtls-rprx-vision,"
             f"public-key=\"{public}\",short-id={sid},"
-            f"over-tls=true,sni={sni},tls-profile=chrome,udp=true"
+            f"over-tls=true,sni={sni},tls-profile=chrome147,udp=true"
         )
         (folder / "node.txt").write_text(uri + "\n", encoding="utf-8")
         (folder / "loon.txt").write_text(loon + "\n", encoding="utf-8")
