@@ -6,8 +6,10 @@ VERSION=v26.10.31
 XRAY=/usr/local/bin/xray
 CONF=/usr/local/etc/xray/config.json
 BOT=/opt/hy2-telegram/bot.py
+DUAL=/opt/hy2-telegram/dual_bot.py
 CLIENTS=/var/lib/hy2-telegram/xray/clients
 RAW=https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/bot.py
+RAW_DUAL=https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/dual_bot.py
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 fail() { printf '[错误] %s\n' "$*" >&2; exit 1; }
@@ -69,6 +71,13 @@ apt-get install -y --no-install-recommends curl openssl python3 qrencode ca-cert
 curl -fsSL --retry 3 "$RAW" -o "$TMP/bot.py"
 python3 -m py_compile "$TMP/bot.py"
 grep -Fq 'if command=="/xget"' "$TMP/bot.py" || fail '机器人版本缺少 /xget，已停止安装。'
+# Preserve optional TUIC dual-protocol command handling; update its adapter only
+# if the existing bot unit actually launches dual_bot.py.
+if systemctl cat hy2-telegram.service | grep -Fq 'ExecStart=/usr/bin/python3 /opt/hy2-telegram/dual_bot.py'; then
+  [[ -f "$DUAL" ]] || fail '现有机器人以双协议模式运行，但 dual_bot.py 不存在。'
+  curl -fsSL --retry 3 "$RAW_DUAL" -o "$TMP/dual_bot.py"
+  python3 -m py_compile "$TMP/dual_bot.py"
+fi
 curl -fsSL --retry 3 https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh -o "$TMP/install-release.sh"
 bash -n "$TMP/install-release.sh"
 # Keep this marker on errors so an interrupted installation can be retried.
@@ -151,13 +160,36 @@ sleep 2
 systemctl is-active --quiet xray.service || fail 'Xray 服务未保持 active，请检查 journalctl -u xray。'
 ss -H -ltnp 'sport = :443' | grep -q '"xray"' || fail 'TCP 443 没有由 Xray 监听。'
 
+# Verify access as the actual restricted Telegram service user.
+for name in WIN-PC MACBOOK IPHONE FAMILY; do
+  sudo -u hy2bot test -r "$CLIENTS/$name/node.txt" || fail "机器人无法读取 $name 的节点链接。"
+  sudo -u hy2bot test -r "$CLIENTS/$name/node-qr.png" || fail "机器人无法读取 $name 的二维码。"
+done
+
 backup=$BOT.backup-xhttp-$(date +%Y%m%d-%H%M%S)
 cp -a "$BOT" "$backup"
+if [[ -f "$TMP/dual_bot.py" ]]; then
+  dual_backup=$DUAL.backup-xhttp-$(date +%Y%m%d-%H%M%S)
+  cp -a "$DUAL" "$dual_backup"
+  install -o root -g root -m 755 "$TMP/dual_bot.py" "$DUAL"
+fi
 install -o root -g root -m 755 "$TMP/bot.py" "$BOT"
-if ! systemctl restart hy2-telegram.service || ! systemctl is-active --quiet hy2-telegram.service; then
+if ! systemctl restart hy2-telegram.service; then
   install -o root -g root -m 755 "$backup" "$BOT"
+  if [[ -n "${dual_backup:-}" ]]; then
+    install -o root -g root -m 755 "$dual_backup" "$DUAL"
+  fi
   systemctl restart hy2-telegram.service || true
-  fail '机器人更新失败，已恢复旧版本。Xray 保持运行。'
+  fail '机器人重启失败，已恢复旧版本。Xray 保持运行。'
+fi
+sleep 2
+if ! systemctl is-active --quiet hy2-telegram.service; then
+  install -o root -g root -m 755 "$backup" "$BOT"
+  if [[ -n "${dual_backup:-}" ]]; then
+    install -o root -g root -m 755 "$dual_backup" "$DUAL"
+  fi
+  systemctl restart hy2-telegram.service || true
+  fail '机器人未保持 active，已恢复旧版本。Xray 保持运行。'
 fi
 if command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then ufw allow 443/tcp; fi
 rm -f "$PENDING"
