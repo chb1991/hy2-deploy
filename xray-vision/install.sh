@@ -225,11 +225,11 @@ log "备份并更新 Telegram 机器人……"
 cp -a "$BOT" "$TMP/bot.backup"
 if [[ -f "$TMP/dual_bot.py" ]]; then
   cp -a "$DUAL" "$TMP/dual.backup"
-  install -o root -g root -m 755 "$TMP/dual_bot.py" "$DUAL"
   DUAL_UPDATED=1
+  install -o root -g root -m 755 "$TMP/dual_bot.py" "$DUAL"
 fi
-install -o root -g root -m 755 "$TMP/bot.py" "$BOT"
 BOT_UPDATED=1
+install -o root -g root -m 755 "$TMP/bot.py" "$BOT"
 systemctl restart hy2-telegram.service || fail "Telegram 重启失败。"
 sleep 2
 systemctl is-active --quiet hy2-telegram.service || fail "Telegram 未保持 active。"
