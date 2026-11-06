@@ -85,6 +85,115 @@ class QuotaTests(unittest.TestCase):
             write.assert_not_called()
             sender.assert_not_called()
 
+    def test_user_report_204_95_calibrates_midcycle_without_double_counting(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16, "allowance_gib": 500}
+        earlier = iface(created=date(2026, 11, 6))
+        base = quota.create_calibration(
+            config, "204.95", "2026-10-16", "2026-11-06",
+            now=NOW, reader=lambda _: earlier,
+        )
+        self.assertEqual(base["base_used_bytes"], quota.calibration_amount("204.95"))
+        first = quota.collect(config, now=NOW, reader=lambda _: earlier, calibration=base)
+        self.assertTrue(first["complete"])
+        self.assertTrue(first["calibrated"])
+        self.assertEqual(first["cycle"], {"tx": 0, "rx": 0})
+        self.assertEqual(first["used_bytes"], base["base_used_bytes"])
+        self.assertAlmostEqual(first["remaining_bytes"] / quota.GIB, 295.05, places=5)
+        self.assertEqual(first["cycle_start"], "2026-10-16")
+        self.assertEqual(first["next_reset"], "2026-11-16")
+
+        later_time = NOW + timedelta(minutes=15)
+        later = iface(created=date(2026, 11, 6), now=later_time)
+        later["traffic"]["total"]["tx"] += 2 * quota.GIB
+        later["traffic"]["total"]["rx"] += quota.GIB // 2
+        later["updated"]["time"] = {"hour": later_time.hour, "minute": later_time.minute - 1}
+        # Old 10/16 history is still present but MUST NOT be counted twice.
+        actual = quota.collect(
+            config, now=later_time, reader=lambda _: later, calibration=base,
+        )
+        self.assertTrue(actual["complete"])
+        self.assertEqual(actual["cycle"]["tx"], 2 * quota.GIB)
+        self.assertEqual(actual["cycle"]["rx"], quota.GIB // 2)
+        self.assertAlmostEqual(actual["used_bytes"] / quota.GIB, 207.45, places=5)
+        self.assertAlmostEqual(actual["remaining_bytes"] / quota.GIB, 292.55, places=5)
+        self.assertIn("人工校准", quota.alert_text(actual, 80))
+        self.assertIn("校准后新增上传", quota.alert_text(actual, 80))
+
+    def test_same_cycle_reinstall_keeps_original_anchor(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16}
+        first = quota.create_calibration(
+            config, "204.95", "2026-10-16", "2026-11-06",
+            now=NOW, reader=lambda _: iface(created=date(2026, 11, 6)),
+        )
+        # Even on a later day, reinstallation cannot reset the counter baseline.
+        restored = quota.create_calibration(
+            config, "204.95", "2026-10-16", "2026-11-06",
+            now=NOW + timedelta(days=2), previous=first,
+            reader=lambda _: self.fail("Reinstall must not recapture counters"),
+        )
+        self.assertIs(first, restored)
+        with self.assertRaises(quota.MonitoringError):
+            quota.create_calibration(config, "205", "2026-10-16", "2026-11-06",
+                                     now=NOW, previous=first)
+        with self.assertRaises(quota.MonitoringError):
+            quota.create_calibration(config, "204.95", "2026-10-16", "2026-11-05",
+                                     now=NOW, reader=lambda _: iface())
+        with self.assertRaises(quota.MonitoringError):
+            quota.create_calibration(config, "204.95", "2026-11-16", "2026-11-06",
+                                     now=NOW, reader=lambda _: iface())
+
+    def test_new_billing_cycle_excludes_previous_204_95_calibration(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16}
+        base = quota.create_calibration(
+            config, "204.95", "2026-10-16", "2026-11-06",
+            now=NOW, reader=lambda _: iface(),
+        )
+        next_time = datetime(2026, 11, 16, 0, 20, tzinfo=TZ)
+        new_iface = iface(now=NOW)
+        new_iface["updated"] = {
+            "date": day(next_time.date()),
+            "time": {"hour": 0, "minute": 15},
+        }
+        new_iface["traffic"]["day"].append({
+            "date": day(next_time.date()), "tx": quota.GIB, "rx": quota.GIB // 2,
+        })
+        snapshot = quota.collect(config, now=next_time,
+                                 reader=lambda _: new_iface, calibration=base)
+        self.assertFalse(snapshot["calibrated"])
+        self.assertEqual(snapshot["cycle_start"], "2026-11-16")
+        self.assertEqual(snapshot["used_bytes"], quota.GIB + quota.GIB // 2)
+        self.assertAlmostEqual(snapshot["remaining_bytes"] / quota.GIB, 498.5)
+
+    def test_counter_rollback_prevents_calibrated_quota_alert(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16}
+        earlier = iface()
+        base = quota.create_calibration(config, "204.95", "2026-10-16",
+                                        "2026-11-06", now=NOW, reader=lambda _: earlier)
+        modified = iface()
+        modified["traffic"]["total"]["tx"] = 0
+        result = quota.collect(config, now=NOW, reader=lambda _: modified, calibration=base)
+        self.assertFalse(result["complete"])
+        self.assertIsNone(result["remaining_bytes"])
+        with mock.patch.object(quota, "write_json") as write:
+            self.assertIsNone(quota.check_alerts(result, sender=mock.Mock()))
+            write.assert_not_called()
+
+    def test_calibration_next_day_gap_disables_alerts_without_repeating_old_days(self):
+        config = {"interfaces": ["eth0"], "reset_day": 16}
+        base = quota.create_calibration(config, "204.95", "2026-10-16",
+                                        "2026-11-06", now=NOW, reader=lambda _: iface())
+        later = iface(now=NOW + timedelta(days=2))
+        later["updated"] = {"date": day(date(2026, 11, 8)),
+                            "time": {"hour": 12, "minute": 35}}
+        later["traffic"]["day"] = [
+            item for item in later["traffic"]["day"]
+            if item["date"] != day(date(2026, 11, 7))
+        ]
+        result = quota.collect(config, now=NOW + timedelta(days=2),
+                               reader=lambda _: later, calibration=base)
+        self.assertFalse(result["complete"])
+        self.assertIn("校准后", result["note"])
+
     def test_stale_data_disables_quota(self):
         old = iface()
         old["updated"] = {"date": day(date(2026, 11, 5)), "time": {"hour": 8, "minute": 0}}
