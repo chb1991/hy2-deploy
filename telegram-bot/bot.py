@@ -19,6 +19,7 @@ NODE_FILE=os.environ.get("NODE_FILE","/var/lib/hy2-telegram/node.txt")
 HELPER="/usr/local/sbin/hy2-users"
 HYSTERIA_BIN="/usr/local/bin/hysteria"
 XRAY_CLIENTS_DIR="/var/lib/hy2-telegram/xray/clients"
+VISION_CLIENTS_DIR="/var/lib/hy2-telegram/vision/clients"
 XRAY_BIN="/usr/local/bin/xray"
 BOT_API="https://api.telegram.org/bot"+TOKEN
 COMMANDS=[
@@ -30,7 +31,10 @@ COMMANDS=[
     {"command":"get","description":"获取设备链接和二维码"},
     {"command":"xall","description":"获取全部 XHTTP REALITY 节点"},
     {"command":"xget","description":"获取 Xray 指定设备节点和二维码"},
-    {"command":"xstatus","description":"查看 Xray TCP 服务状态"},
+    {"command":"xstatus","description":"查看 XHTTP REALITY 服务状态"},
+    {"command":"vstatus","description":"查看 Vision TCP 服务状态"},
+    {"command":"vall","description":"发送全部 Vision 节点及二维码"},
+    {"command":"vget","description":"获取 Vision 设备节点及二维码"},
     {"command":"node","description":"获取指定设备节点链接"},
     {"command":"qr","description":"获取指定设备二维码"},
     {"command":"delete","description":"删除设备（需要二次确认）"},
@@ -291,7 +295,8 @@ def status_text():
         f"🔸 UDP：{socket_count(['-uan'])}\n"
         f"🚦 流量：{traffic}\n\n"
         f"ℹ️ HY2 状态：{'🟢' if state=='active' else '🔴'} {state}"
-        + (f"\n🌐 Xray TCP：{xray_service_state()}" if xray_names() else "")
+        + (f"\n🌐 Xray XHTTP TCP：{xray_service_state()}" if xray_names() else "")
+        + (f"\n🌐 Xray Vision TCP：{vision_service_state()}" if vision_names() else "")
     )
 
 
@@ -400,6 +405,68 @@ def send_xray_client(chat_id,name):
     send_photo(chat_id,item["qr_path"],f"📷 XHTTP REALITY · {item['name']}")
 
 
+def vision_names():
+    try:
+        return sorted(
+            name for name in os.listdir(VISION_CLIENTS_DIR)
+            if re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{0,31}",name)
+            and os.path.isdir(os.path.join(VISION_CLIENTS_DIR,name))
+        )
+    except OSError:
+        return []
+
+
+def vision_service_state():
+    try:
+        result=subprocess.run(
+            ["systemctl","is-active","xray-vision.service"],
+            capture_output=True,text=True,timeout=3,check=False
+        )
+        return result.stdout.strip() or "unknown"
+    except (OSError,subprocess.TimeoutExpired):
+        return "unknown"
+
+
+def vision_status_text():
+    names=vision_names()
+    return (
+        "🌐 VLESS + REALITY + Vision\n\n"
+        "🔹 传输：TCP（RAW）\n"
+        "🔸 服务：xray-vision.service\n"
+        f"ℹ️ 状态：{vision_service_state()}\n"
+        f"📱 设备：{', '.join(names) if names else '未部署'}"
+    )
+
+
+def vision_client(name):
+    name=str(name).strip().upper()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{0,31}",name):
+        raise ValueError("设备名称格式无效")
+    if name not in vision_names():
+        raise ValueError("Vision 设备不存在，请先部署 Vision 服务")
+    directory=os.path.join(VISION_CLIENTS_DIR,name)
+    node=os.path.join(directory,"node.txt")
+    qr=os.path.join(directory,"node-qr.png")
+    loon=os.path.join(directory,"loon.txt")
+    with open(node,"r",encoding="utf-8") as f:
+        uri=f.read().strip()
+    with open(loon,"r",encoding="utf-8") as f:
+        loon_line=f.read().strip()
+    if not uri.startswith("vless://") or not os.path.isfile(qr):
+        raise ValueError("Vision 节点文件不完整")
+    return {"name":name,"uri":uri,"qr_path":qr,"loon":loon_line}
+
+
+def send_vision_client(chat_id,name):
+    item=vision_client(name)
+    send_message(chat_id,
+        f"🌐 Vision · {item['name']}\n\n"
+        f"🔗 VLESS 节点链接：\n{item['uri']}\n\n"
+        f"📋 Loon 专用配置行：\n{item['loon']}"
+    )
+    send_photo(chat_id,item["qr_path"],f"📷 VLESS REALITY Vision · {item['name']}")
+
+
 def help_text():
     return (
         "CHBVPS HY2 机器人命令\n\n"
@@ -409,6 +476,9 @@ def help_text():
         "/add_defaults - 发送 WIN-PC、MACBOOK、IPHONE、FAMILY 全部节点链接和二维码\n"
         "/add WIN-PC - 添加一个设备并生成独立链接、二维码\n"
         "/get WIN-PC - 发送指定设备的链接和二维码\n"
+        "/vstatus - 查看 Vision 服务状态\n"
+        "/vall - 发送全部 Vision 节点和二维码\n"
+        "/vget IPHONE - 获取 Vision 设备链接、Loon 配置和二维码\n"
         "/xall - 发送全部 XHTTP REALITY 节点链接和二维码\n"
         "/xget IPHONE - 获取 Xray 指定设备链接和二维码\n"
         "/xstatus - 查看 Xray TCP 服务状态\n"
@@ -479,6 +549,23 @@ def handle_message(message):
                 send_message(chat_id,"用法：/xget IPHONE")
                 return
             send_xray_client(chat_id,args[0])
+            return
+        if command=="/vstatus":
+            send_message(chat_id,vision_status_text())
+            return
+        if command=="/vall":
+            names=vision_names()
+            if not names:
+                send_message(chat_id,"尚未部署 Vision 服务。")
+                return
+            for name in names:
+                send_vision_client(chat_id,name)
+            return
+        if command=="/vget":
+            if len(args)!=1:
+                send_message(chat_id,"用法：/vget IPHONE")
+                return
+            send_vision_client(chat_id,args[0])
             return
         if command=="/add":
             if len(args)!=1:
