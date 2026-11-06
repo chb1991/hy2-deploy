@@ -17,7 +17,7 @@ grep -Fq 'install --version "$XRAY_VERSION"' "$ROOT/xray-xhttp/install.sh"
 (
   XRAY_VERSION="$INSTALLER_VERSION"
   . /etc/os-release
-  [[ "$XRAY_VERSION" == "$VERSION" ]] || {
+  [[ "$XRAY_VERSION" == "$INSTALLER_VERSION" ]] || {
     printf 'FAIL: /etc/os-release overwrote XRAY_VERSION\n' >&2
     exit 1
   }
