@@ -172,7 +172,7 @@ class V2Tests(unittest.TestCase):
         ui.handle_message(message("/status"), self.b)
         self.assertIn("/get [设备] [协议]", self.b.messages[0]["text"])
         self.assertIn("HY2 流量", self.b.messages[1]["text"])
-        self.assertIn("当前统计周期", self.b.messages[1]["text"])
+        self.assertIn("本次服务运行周期", self.b.messages[1]["text"])
 
     def test_get_all_links_and_qr_on_demand(self):
         ui.handle_message(message("/get IPHONE"), self.b, self.tuic)
