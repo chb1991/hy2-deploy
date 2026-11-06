@@ -18,6 +18,8 @@ STATS_URL=os.environ.get("HY2_STATS_URL","http://127.0.0.1:9999").rstrip("/")
 NODE_FILE=os.environ.get("NODE_FILE","/var/lib/hy2-telegram/node.txt")
 HELPER="/usr/local/sbin/hy2-users"
 HYSTERIA_BIN="/usr/local/bin/hysteria"
+XRAY_CLIENTS_DIR="/var/lib/hy2-telegram/xray/clients"
+XRAY_BIN="/usr/local/bin/xray"
 BOT_API="https://api.telegram.org/bot"+TOKEN
 COMMANDS=[
     {"command":"start","description":"完整状态和设备概览"},
@@ -26,6 +28,9 @@ COMMANDS=[
     {"command":"add","description":"添加设备，例如 /add WIN-PC"},
     {"command":"add_defaults","description":"发送全部设备节点链接和二维码"},
     {"command":"get","description":"获取设备链接和二维码"},
+    {"command":"xall","description":"获取全部 XHTTP REALITY 节点"},
+    {"command":"xget","description":"获取 Xray 指定设备节点和二维码"},
+    {"command":"xstatus","description":"查看 Xray TCP 服务状态"},
     {"command":"node","description":"获取指定设备节点链接"},
     {"command":"qr","description":"获取指定设备二维码"},
     {"command":"delete","description":"删除设备（需要二次确认）"},
@@ -285,7 +290,7 @@ def status_text():
         f"🔹 TCP：{socket_count(['-tan'])}\n"
         f"🔸 UDP：{socket_count(['-uan'])}\n"
         f"🚦 流量：{traffic}\n\n"
-        f"ℹ️ HY2 状态：{'🟢' if state=='active' else '🔴'} {state}"
+        f"ℹ️ HY2 状态：{'🟢' if state=='active' else '🔴'} {state}\n"        + (f"🌐 Xray TCP：{xray_status_text().splitlines()[3]}" if xray_names() else "")
     )
 
 
@@ -337,6 +342,54 @@ def send_client(chat_id,item,prefix=""):
     send_photo(chat_id,item["qr_path"],f"📷 {item['name']} 专属二维码")
 
 
+def xray_names():
+    try:
+        return sorted(
+            name for name in os.listdir(XRAY_CLIENTS_DIR)
+            if re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{0,31}",name)
+            and os.path.isdir(os.path.join(XRAY_CLIENTS_DIR,name))
+        )
+    except OSError:
+        return []
+
+
+def xray_client(name):
+    name=str(name).strip().upper()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{0,31}",name):
+        raise ValueError("设备名称格式无效")
+    if name not in xray_names():
+        raise ValueError("Xray 设备不存在，请先部署 XHTTP REALITY")
+    directory=os.path.join(XRAY_CLIENTS_DIR,name)
+    node=os.path.join(directory,"node.txt")
+    qr=os.path.join(directory,"node-qr.png")
+    with open(node,"r",encoding="utf-8") as f:
+        uri=f.read().strip()
+    if not uri.startswith("vless://") or not os.path.isfile(qr):
+        raise ValueError("Xray 节点文件不完整")
+    return {"name":name,"uri":uri,"qr_path":qr}
+
+
+def xray_status_text():
+    try:
+        service=subprocess.run(
+            ["systemctl","is-active","xray.service"],
+            capture_output=True,text=True,timeout=3,check=False
+        ).stdout.strip() or "unknown"
+        result=subprocess.run(
+            [XRAY_BIN,"version"],capture_output=True,text=True,timeout=5,check=False
+        )
+        version=(result.stdout or result.stderr).splitlines()[0].strip()[:100] if result.returncode==0 else "未知"
+    except (OSError,IndexError,subprocess.TimeoutExpired):
+        service,version="unknown","未知"
+    return "🌐 Xray TCP 服务\n\n📦 版本："+version+"\nℹ️ 状态："+service+"\n📱 设备："+(", ".join(xray_names()) or "未部署")
+
+
+def send_xray_client(chat_id,name):
+    item=xray_client(name)
+    send_message(chat_id,f"🌐 XHTTP + REALITY · {item['name']}\n\n🔗 VLESS 节点链接：\n{item['uri']}")
+    send_photo(chat_id,item["qr_path"],f"📷 XHTTP REALITY · {item['name']}")
+
+
 def help_text():
     return (
         "CHBVPS HY2 机器人命令\n\n"
@@ -346,6 +399,9 @@ def help_text():
         "/add_defaults - 发送 WIN-PC、MACBOOK、IPHONE、FAMILY 全部节点链接和二维码\n"
         "/add WIN-PC - 添加一个设备并生成独立链接、二维码\n"
         "/get WIN-PC - 发送指定设备的链接和二维码\n"
+        "/xall - 发送全部 XHTTP REALITY 节点链接和二维码\n"
+        "/xget IPHONE - 获取 Xray 指定设备链接和二维码\n"
+        "/xstatus - 查看 Xray TCP 服务状态\n"
         "/node WIN-PC - 只获取指定设备链接\n"
         "/qr WIN-PC - 只获取指定设备二维码\n"
         "/delete WIN-PC - 删除设备（需要二次确认）\n"
@@ -396,6 +452,23 @@ def handle_message(message):
                 send_message(chat_id,"四个默认设备已经存在，重新发送当前有效链接和二维码。")
             for item in clients:
                 send_client(chat_id,item)
+            return
+        if command=="/xstatus":
+            send_message(chat_id,xray_status_text())
+            return
+        if command=="/xall":
+            names=xray_names()
+            if not names:
+                send_message(chat_id,"尚未部署 XHTTP REALITY，请先在 VPS 安装 Xray。")
+                return
+            for name in names:
+                send_xray_client(chat_id,name)
+            return
+        if command=="/xget":
+            if len(args)!=1:
+                send_message(chat_id,"用法：/xget IPHONE")
+                return
+            send_xray_client(chat_id,args[0])
             return
         if command=="/add":
             if len(args)!=1:
