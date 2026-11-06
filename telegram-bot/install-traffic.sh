@@ -18,6 +18,7 @@ TMP="$(mktemp -d /tmp/chbvps-traffic.XXXXXXXX)"
 BACKUP="/root/chbvps-traffic-backups/$(date +%Y%m%d-%H%M%S)-$$"
 APPLIED=0
 DONE=0
+TIMER_WAS_ACTIVE=0
 
 fail() { printf '\n[流量监控] 错误：%s\n' "$*" >&2; exit 1; }
 log() { printf '\n[流量监控] %s\n' "$*"; }
@@ -42,6 +43,9 @@ cleanup() {
     systemctl daemon-reload || true
     systemctl restart vnstat.service || true
     systemctl restart hy2-telegram.service || true
+    if (( TIMER_WAS_ACTIVE == 1 )); then
+      systemctl enable --now chbvps-traffic.timer >/dev/null 2>&1 || true
+    fi
   fi
   rm -rf "$TMP"
   exit "$rc"
@@ -69,6 +73,7 @@ printf '注意：204.95G 是用户提供时的数值；若 VPS 在报告后产�
 read -r -p '确认安装？[y/N]： ' ans
 [[ "$ans" == y || "$ans" == Y ]] || { echo "已取消。"; exit 0; }
 
+if systemctl is-active --quiet chbvps-traffic.timer; then TIMER_WAS_ACTIVE=1; fi
 install -d -o root -g root -m 700 "$BACKUP"
 for path in "$VNSTAT_CONF" "$CONFIG" "$UNIT" "$TIMER" \
             "$BOT_DIR/traffic_quota.py" "$BOT_DIR/v2_ui.py" \
@@ -119,6 +124,7 @@ printf '将监控网卡：%s\n' "$IFACES"
 
 # From now on any failure attempts rollback for files, never for proxy services.
 APPLIED=1
+systemctl stop chbvps-traffic.timer >/dev/null 2>&1 || true
 log "按每月16日配置 vnStat 的统计月起点……"
 python3 - "$VNSTAT_CONF" <<'PY'
 from pathlib import Path
@@ -211,6 +217,14 @@ systemctl daemon-reload
 # Produce a snapshot before starting scheduled notifications.
 /usr/bin/env -u TZ python3 "$BOT_DIR/traffic_quota.py"
 [[ -r "$STATE/quota.json" ]] || fail "未能生成流量快照"
+python3 - "$STATE/quota.json" <<'PY'
+import json,sys
+s=json.load(open(sys.argv[1],encoding="utf-8"))
+if not s.get("calibrated") or not s.get("complete") or s.get("baseline_bytes",0)<1:
+    raise SystemExit("首次校准快照无效；拒绝发布错误的剩余额度")
+print("已读取并校验校准快照：",s["baseline_bytes"],"bytes；已用",
+      round(s["used_bytes"]/1024**3,2),"GB")
+PY
 sudo -u hy2bot test -r "$STATE/quota.json" || fail "Telegram 账户无法读取流量快照"
 systemctl enable --now chbvps-traffic.timer >/dev/null
 systemctl restart hy2-telegram.service
