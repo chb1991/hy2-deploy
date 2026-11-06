@@ -335,3 +335,34 @@ curl -fsSL -o /root/upgrade-chbvps-v2.sh https://raw.githubusercontent.com/chb19
 升级前要求：`hy2-telegram.service` 已在运行，现有 `/usr/local/sbin/core-update` 与 `/usr/local/sbin/hy2-restart` 存在，并保留原有管理员 Bot Token 配置。新脚本会更新机器人服务所使用的 `bot.py`、`dual_bot.py`（若存在）和 `v2_ui.py`，仅重启 `hy2-telegram.service`，不会重启 HY2/TUIC/Vision/XHTTP。安装后在 Telegram 发送 `/start` 验证按钮。
 
 源代码：`telegram-bot/v2_ui.py`；回归测试：`telegram-bot/test_v2_ui.py`。GitHub Actions 通过不等于真实 Telegram API / VPS 端到端测试。首次实际升级后应检查 `systemctl is-active hy2-telegram` 与 Telegram 私聊按钮功能。
+
+## CHBVPS 500GB 整机流量监控（每月16日重置，无服务商 API）
+
+通过 Debian 13 上的 vnStat 2.x 监控 VPS 默认公网路由网卡的 **TX 上传 + RX 下载**，包括 HY2、TUIC、Vision、XHTTP 以及系统自身的网络通信。**不需要搬瓦工 KiwiVM API**。本地定时器每五分钟将流量写入 `quota.json`，Telegram V2.0 的 `/start` 显示周期摘要、`/status` 显示今日/本期/累计上传下载和剩余额度估算。`/devices` 只显示账号和在线状态，不再列出逐设备流量。
+
+**前提：** 已经运行 CHBVPS Telegram V2.0；如果还没有安装，先执行上方的 `telegram-bot/upgrade-v2.sh`。随后在 VPS 的 root SSH 中执行：
+
+~~~bash
+curl -fsSL -o /root/install-chbvps-traffic.sh https://raw.githubusercontent.com/chb1991/hy2-deploy/main/telegram-bot/install-traffic.sh && bash /root/install-chbvps-traffic.sh
+~~~
+
+安装器仅新增/配置 vnStat、部署 `/opt/hy2-telegram/traffic_quota.py`、更新 V2 UI 和部署独立的 `chbvps-traffic.timer/service`，并重启 vnStat 与 Telegram 机器人；不修改或重启任一代理服务。自动识别 IPv4/IPv6 默认路由网卡（如不同则分别计数）。如果默认路由经过代理隧道，安装器会拒绝自动识别，需先人工核对物理公网网卡。
+
+**计费设置：** 500GB 按 `500 × 1024³` 字节估算；本地 `MonthRotate=16`，并以 VPS 操作系统时区的每月16日零时作为周期边界。该时间只是近似计费边界，搬瓦工实际重置时分、流量倍率和计费值可能不同。不要将 vnStat 本地值误当作 KiwiVM 后台的精确余额。
+
+**首次部署重要限制：** vnStat 无法追溯安装之前的流量。如果网卡监控起始日期晚于本周期的16日，机器人会显示“本周期统计不完整”，保留安装后已记录的上传下载，但**不显示本期剩余额度和使用百分比，也不会发送配额预警**；到下一周期才具备完整周期的统计覆盖。即使监控覆盖了本周期，数据仍是服务商账单的近似值。
+
+**阈值：** 80%（400GB）、90%（450GB）、95%（475GB）、100%（500GB），每周期每阈值最多发送一次 Telegram 私聊通知。多个阈值在同次检测中越过时只推送最高等级以避免刷屏。只告警，不自动停止或重启节点；如果上报过期超过60分钟，禁止将该快照作为有效配额告警依据。
+
+**检查与诊断：**
+
+~~~bash
+systemctl status chbvps-traffic.timer --no-pager
+systemctl status vnstat --no-pager
+journalctl -u chbvps-traffic.service -n 30 --no-pager
+cat /var/lib/hy2-telegram/traffic/quota.json
+~~~
+
+快照由 root 定时进程生成，以 `root:hy2bot 0640` 保存，Telegram 机器人只读；真实 Bot Token 只从已有 `/etc/hy2-telegram/bot.env` 加载，不写入 GitHub、日志或公开数据库。安装前原始配置备份保存在 `/root/chbvps-traffic-backups/`。
+
+若需人工指定物理网卡，可先确认 `ip route` 和 `ip -6 route`，随后使用 `CHBVPS_TRAFFIC_IFACES=eth0 bash /root/install-chbvps-traffic.sh`。只有确认网卡确实承载 VPS 公网流量后才应覆盖自动检测。
