@@ -6,20 +6,14 @@ import subprocess
 import threading
 
 import bot as hy2
+import v2_ui
 
 TUIC_HELPER = "/usr/local/sbin/tuic-users"
 TUIC_SERVICE = "tuic-singbox.service"
 TUIC_PORT = 51443
 UPDATE_HELPER = "/usr/local/sbin/core-update"
 
-hy2.COMMANDS.extend([
-    {"command": "devices_tuic", "description": "查看 TUIC 设备"},
-    {"command": "add_tuic", "description": "新增 TUIC 设备: /add_tuic IPAD"},
-    {"command": "get_tuic", "description": "获取 TUIC 节点和二维码"},
-    {"command": "delete_tuic", "description": "删除 TUIC 设备，需确认"},
-    {"command": "restart_tuic", "description": "重启 TUIC，需确认"},
-    {"command": "update", "description": "检查并升级 HY2、sing-box 核心，需确认"},
-])
+# V2 command menu is shared by single- and dual-protocol bot processes.
 old_handle_message = hy2.handle_message
 old_handle_callback = hy2.handle_callback
 
@@ -251,6 +245,8 @@ def handle_message(message):
         return
     command = args[0].split("@", 1)[0].lower()
     chat_id = message["chat"]["id"]
+    if v2_ui.handle_message(message, hy2, tuic=manage):
+        return
     try:
         if command == "/status":
             send_status(chat_id)
@@ -271,21 +267,11 @@ def handle_message(message):
                 return
             name = args[1]
             if command == "/delete_tuic":
-                hy2.send_message(chat_id, f"确认删除 TUIC 设备 {name}？只有 TUIC 会重启。", {
-                    "inline_keyboard": [[
-                        {"text": "确认", "callback_data": "dual:delete:" + name.upper()},
-                        {"text": "取消", "callback_data": "dual:cancel"},
-                    ]]
-                })
+                v2_ui.issue_confirm(hy2, chat_id, None, "del", "tuic", name, manage)
             else:
                 send_item(chat_id, manage("add" if command == "/add_tuic" else "get", name))
         elif command == "/restart_tuic":
-            hy2.send_message(chat_id, "确定只重启 TUIC？不会重启 HY2。", {
-                "inline_keyboard": [[
-                    {"text": "确认重启 TUIC", "callback_data": "dual:restart:confirm"},
-                    {"text": "取消", "callback_data": "dual:cancel"},
-                ]]
-            })
+            v2_ui.issue_confirm(hy2, chat_id, None, "rst", "tuic", tuic=manage)
         else:
             old_handle_message(message)
     except Exception as exc:
@@ -296,10 +282,15 @@ def handle_callback(query):
     if not hy2.authorized(query.get("from") or {}, (query.get("message") or {}).get("chat") or {}):
         return
     data = query.get("data", "")
+    if data.startswith("ui:"):
+        return v2_ui.handle_callback(query, hy2, tuic=manage)
     if not data.startswith("dual:"):
         return old_handle_callback(query)
     hy2.telegram("answerCallbackQuery", {"callback_query_id": query["id"]})
     chat_id = query["message"]["chat"]["id"]
+    if data in ("dual:update:confirm", "dual:restart:confirm") or data.startswith("dual:delete:"):
+        hy2.send_message(chat_id, "旧确认按钮已失效。请使用 /update、/restart 或 /del 重新发起操作。")
+        return
     try:
         if data in ("dual:cancel", "dual:update:cancel"):
             hy2.send_message(chat_id, "已取消。")
