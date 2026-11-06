@@ -113,8 +113,8 @@ def write_atomic(path, data):
 def main():
     data = inspect()  # Validate all four users before touching any file.
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = BACKUPS / ("loon-profile-" + stamp + "-" + str(os.getpid()))
-    backup.mkdir(parents=True, mode=0o700)
+    BACKUPS.mkdir(parents=True, mode=0o700, exist_ok=True)
+    backup = Path(tempfile.mkdtemp(prefix="loon-profile-" + stamp + "-", dir=str(BACKUPS)))
     originals = []
     try:
         for name, node, loon, qr, new_url, new_native in data:
