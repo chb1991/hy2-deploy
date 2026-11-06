@@ -171,8 +171,45 @@ class V2Tests(unittest.TestCase):
         ui.handle_message(message("/help"), self.b)
         ui.handle_message(message("/status"), self.b)
         self.assertIn("/get [设备] [协议]", self.b.messages[0]["text"])
-        self.assertIn("HY2 流量", self.b.messages[1]["text"])
-        self.assertIn("本次服务运行周期", self.b.messages[1]["text"])
+        self.assertIn("整机流量", self.b.messages[1]["text"])
+        self.assertIn("500GB / 每月16日重置", self.b.messages[1]["text"])
+
+    def test_status_shows_complete_whole_vps_quota(self):
+        snapshot = {
+            "schema": 1, "complete": True,
+            "allowance_gib": 500, "cycle_start": "2026-10-16",
+            "next_reset": "2026-11-16", "interfaces": ["eth0"],
+            "today": {"tx": 1*ui.GIB, "rx": 2*ui.GIB},
+            "cycle": {"tx": 200*ui.GIB, "rx": 20*ui.GIB},
+            "lifetime": {"tx": 300*ui.GIB, "rx": 90*ui.GIB},
+            "used_bytes": 220*ui.GIB, "remaining_bytes": 280*ui.GIB,
+            "percent": 44.0, "sampled_local": "2026-11-06T12:30+08:00",
+        }
+        with mock.patch.object(ui, "read_quota_snapshot", return_value=snapshot):
+            ui.handle_message(message("/start"), self.b, self.tuic)
+            self.assertIn("220.00 GB / 500 GB", self.b.messages[-1]["text"])
+            ui.handle_message(message("/status"), self.b, self.tuic)
+        body = self.b.messages[-1]["text"]
+        self.assertIn("剩余额度（估算）  280.00 GB", body)
+        self.assertIn("↑ 上传  200.00 GB", body)
+        self.assertIn("↓ 下载  20.00 GB", body)
+        self.assertIn("本机网卡双向流量", body) if "本机网卡双向流量" in body else self.assertIn("网卡双向流量", body)
+
+    def test_status_incomplete_never_invents_remaining_quota(self):
+        snapshot = {
+            "schema": 1, "complete": False, "interfaces": ["eth0"],
+            "cycle_start": "2026-10-16", "next_reset": "2026-11-16",
+            "today": {"tx": 100, "rx": 100}, "cycle": {"tx": 200, "rx": 300},
+            "lifetime": {"tx": 500, "rx": 1000}, "used_bytes": 500,
+            "sampled_local": "2026-11-06T12:40+08:00",
+            "note": "eth0 的监控始于 2026-11-06",
+        }
+        with mock.patch.object(ui, "read_quota_snapshot", return_value=snapshot):
+            ui.handle_message(message("/status"), self.b, self.tuic)
+        body = self.b.messages[-1]["text"]
+        self.assertIn("本周期统计不完整", body)
+        self.assertNotIn("剩余额度（估算）", body)
+        self.assertIn("不显示不可靠的剩余额度", body)
 
     def test_get_all_links_and_qr_on_demand(self):
         ui.handle_message(message("/get IPHONE"), self.b, self.tuic)
@@ -206,7 +243,7 @@ class V2Tests(unittest.TestCase):
 
     def test_devices_hy2_current_cycle_and_no_tuic_online(self):
         ui.handle_message(message("/devices hy2"), self.b, self.tuic)
-        self.assertIn("当前统计周期", self.b.messages[-1]["text"])
+        self.assertIn("流量统一在 /status", self.b.messages[-1]["text"])
         ui.handle_message(message("/devices tuic"), self.b, self.tuic)
         self.assertIn("不提供此协议的可靠在线人数", self.b.messages[-1]["text"])
 
